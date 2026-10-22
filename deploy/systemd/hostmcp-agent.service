@@ -1,0 +1,15 @@
+# User unit: ~/.config/systemd/user/hostmcp-agent.service
+# Runs as the user's real account, with that account's ordinary OS authority.
+[Unit]
+Description=HostMCP Device Agent
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/hostmcp agent run --config %h/.config/hostmcp/agent.json
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

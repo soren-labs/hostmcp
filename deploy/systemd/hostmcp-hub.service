@@ -1,0 +1,17 @@
+# User unit: ~/.config/systemd/user/hostmcp-hub.service
+# Prefer `hostmcp service install` to render the actual executable/config paths.
+[Unit]
+Description=HostMCP Hub
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/hostmcp hub serve --config %h/.config/hostmcp/hub.json
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

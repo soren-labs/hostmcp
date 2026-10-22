@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>io.hostmcp.agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/YOU/.local/bin/hostmcp</string>
+    <string>agent</string><string>run</string>
+    <string>--config</string><string>/Users/YOU/.config/hostmcp/agent.json</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/YOU</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/YOU</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/YOU/.local/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>StandardOutPath</key><string>/Users/YOU/Library/Logs/HostMCP/agent.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOU/Library/Logs/HostMCP/agent.stderr.log</string>
+</dict>
+</plist>

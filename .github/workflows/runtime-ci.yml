@@ -1,0 +1,48 @@
+name: Runtime CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      GOFLAGS: -mod=readonly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify immutable upstream source
+        run: python3 scripts/verify-source-import.py
+      - name: Check release script syntax
+        run: |
+          sh -n scripts/install.sh
+          bash -n scripts/release.sh
+      - name: Vet
+        run: go vet ./...
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
+      - name: Build native executable
+        run: go build -trimpath -o build/hostmcp ./cmd/hostmcp
+      - name: Smoke test stdio CLI and nine native tools
+        run: python3 scripts/smoke.py --binary ./build/hostmcp --mode stdio
+      - name: Inspect version and local environment
+        run: |
+          ./build/hostmcp version
+          ./build/hostmcp doctor

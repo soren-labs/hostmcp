@@ -1,0 +1,23 @@
+# Build from this checkout; no published container registry image is assumed.
+services:
+  hub:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: hostmcp:local
+    command: ["hub", "serve", "--config", "/state/hub.json"]
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - hostmcp-state:/state
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+volumes:
+  hostmcp-state:
