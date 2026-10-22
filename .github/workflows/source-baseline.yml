@@ -1,0 +1,18 @@
+name: Source baseline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify imported source and licenses
+        run: python3 scripts/verify-source-import.py
+      - name: Check Python script syntax
+        run: python3 -m py_compile scripts/import-upstream.py scripts/verify-source-import.py

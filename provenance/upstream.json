@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/totec448-spec/chat-on-steroids",
+  "ref": "v2.1.11",
+  "commit": "f51acbccdd734f524799ea92bb747be765fba1e4",
+  "status": "Unmodified reference snapshot; not a standalone MCP runtime",
+  "files": [
+    {
+      "upstream_path": "LICENSE",
+      "path": "reference/chat-on-steroids/LICENSE",
+      "group": "license",
+      "bytes": 1086,
+      "sha256": "4e179d05b8808d9b19fd6f6f7a22f5912410c13aefb01f19e569afe8cf6d2fbe"
+    },
+    {
+      "upstream_path": "docs/licenses/codex/LICENSE",
+      "path": "reference/chat-on-steroids/docs/licenses/codex/LICENSE",
+      "group": "license",
+      "bytes": 10926,
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    },
+    {
+      "upstream_path": "docs/licenses/codex/NOTICE",
+      "path": "reference/chat-on-steroids/docs/licenses/codex/NOTICE",
+      "group": "license",
+      "bytes": 242,
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+    },
+    {
+      "upstream_path": "docs/licenses/codex/README.md",
+      "path": "reference/chat-on-steroids/docs/licenses/codex/README.md",
+      "group": "license",
+      "bytes": 794,
+      "sha256": "8abff98c95327e6100182ca6fc274897bc0287b224d90579773678714713da07"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/errors.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/errors.ts",
+      "group": "portable-core",
+      "bytes": 3298,
+      "sha256": "363db5334f84d64600d4359d022909b3cf67cb6e995915258b5570b99d7fefed"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/file-update.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/file-update.ts",
+      "group": "portable-core",
+      "bytes": 7764,
+      "sha256": "ed0417f7bb7d87193dff13cdb24a8e3fbd3caf6ab68a08b05ce58cbf6e3b7790"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/hunk.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/hunk.ts",
+      "group": "portable-core",
+      "bytes": 4058,
+      "sha256": "9f7e3de61455674c51650e7e4a9e0f29cb826dc8b59e005c43ed59d01c4dc976"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/index.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/index.ts",
+      "group": "portable-core",
+      "bytes": 24931,
+      "sha256": "9f0c33de8c5b2c21c1bef8fb71be5b3cd99d133f30c5ac114921b76efbdbf229"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/invocation.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/invocation.ts",
+      "group": "portable-core",
+      "bytes": 7555,
+      "sha256": "3cae811c33b0a5aa17c53256d94e429bb9d4968f54040af0af372639f76d848f"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/mode.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/mode.ts",
+      "group": "portable-core",
+      "bytes": 606,
+      "sha256": "1de649a77dead8a2e3418e3d51e48a5dd3f689fa72211e899021299050865834"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/parser.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/parser.ts",
+      "group": "portable-core",
+      "bytes": 4955,
+      "sha256": "43a8f4e7d4e47cc4dd7f0d3a38fd762fcb1cd2435bd25918961742523b5cda8e"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/seek-sequence.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/seek-sequence.ts",
+      "group": "portable-core",
+      "bytes": 3887,
+      "sha256": "7ba5adc4688a0d81d805f6b6f0c7cfc85f3fbe85d8eff6718ebe45194d1f9cbd"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/streaming-parser.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/streaming-parser.ts",
+      "group": "portable-core",
+      "bytes": 11296,
+      "sha256": "5acb224252f27e81f44b35324fd0452e3bb0e59b7c2e2307fc2805ff9d877a2e"
+    },
+    {
+      "upstream_path": "src/main/codex/apply-patch/text-file.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/apply-patch/text-file.ts",
+      "group": "portable-core",
+      "bytes": 3939,
+      "sha256": "e63ace580b390e5ae0367103a7d4b96cbbd6a06557ba44ed7ac0827206d72614"
+    },
+    {
+      "upstream_path": "src/main/codex/command-batch.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/command-batch.ts",
+      "group": "portable-core",
+      "bytes": 7806,
+      "sha256": "9f9057126034f6918c1025605a2d919d043d26753e6565bcb85fdc263fb00c44"
+    },
+    {
+      "upstream_path": "src/main/codex/exec-output.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/exec-output.ts",
+      "group": "portable-core",
+      "bytes": 2812,
+      "sha256": "132b7ba31cac9bee4dd4f596f11d5e79d487baf2877a2f386a620db5ded61720"
+    },
+    {
+      "upstream_path": "src/main/codex/filesystem.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/filesystem.ts",
+      "group": "portable-core",
+      "bytes": 16609,
+      "sha256": "124e76bd7ab282bdd0d3ef2bec8b312db4b9527563ea07383396a723edfab2d2"
+    },
+    {
+      "upstream_path": "src/main/codex/head-tail-buffer.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/head-tail-buffer.ts",
+      "group": "portable-core",
+      "bytes": 3617,
+      "sha256": "ce3726b5fbfefb6232901c3fbb127b9f94d0cf24ae6c9109529f5c9d4f7f4d16"
+    },
+    {
+      "upstream_path": "src/main/codex/manager.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/manager.ts",
+      "group": "portable-core",
+      "bytes": 2667,
+      "sha256": "45620ad79b50c7b3e4421ceaeef82240eb359c89861a64795d01922aa681d0a8"
+    },
+    {
+      "upstream_path": "src/main/codex/read-backend.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/read-backend.ts",
+      "group": "portable-core",
+      "bytes": 13981,
+      "sha256": "b0f3fbd4e57994dce3f84b7c06efaf2f266a87103e00910af517fbc555798ce9"
+    },
+    {
+      "upstream_path": "src/main/codex/shell.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/shell.ts",
+      "group": "portable-core",
+      "bytes": 13880,
+      "sha256": "5c5c28d3ea047df761afa00c385ff3704bb62148338b80f87bdf863e16960fc0"
+    },
+    {
+      "upstream_path": "src/main/codex/tool-specs.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/tool-specs.ts",
+      "group": "portable-core",
+      "bytes": 9466,
+      "sha256": "f656dbb5c1b3284f7fd8a2366a7ea588f24f3797260af2ab93bb6f6791feb26a"
+    },
+    {
+      "upstream_path": "src/main/codex/truncate.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/truncate.ts",
+      "group": "portable-core",
+      "bytes": 6255,
+      "sha256": "a7cf1ff21e89fd116816ae0f9325a51c74f52c1ba1b92cbc455c707b2fbe0a1a"
+    },
+    {
+      "upstream_path": "src/main/codex/unified-exec-constants.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/unified-exec-constants.ts",
+      "group": "portable-core",
+      "bytes": 3238,
+      "sha256": "f2f9cf12902cce5c8740469a5d18bfffef0dc2c1a7bed75fd23034be960bf9f7"
+    },
+    {
+      "upstream_path": "src/main/codex/unified-exec.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/unified-exec.ts",
+      "group": "portable-core",
+      "bytes": 45358,
+      "sha256": "42943222683ee74690bcd4fb830de93895b58adb6876337ccc02963eef9f7fbd"
+    },
+    {
+      "upstream_path": "src/main/codex/view-image.ts",
+      "path": "reference/chat-on-steroids/src/main/codex/view-image.ts",
+      "group": "portable-core",
+      "bytes": 9468,
+      "sha256": "5077a9801ebc17c71a9edafb66bcaf24d8c41b6f6ac5792244923af99c942357"
+    },
+    {
+      "upstream_path": "src/main/diffstat.ts",
+      "path": "reference/chat-on-steroids/src/main/diffstat.ts",
+      "group": "portable-core",
+      "bytes": 5366,
+      "sha256": "e5d8acbe8bc4e866758431aec653b5f58395cb5d1fe09e3b0358372131eb0fc7"
+    },
+    {
+      "upstream_path": "src/main/env.ts",
+      "path": "reference/chat-on-steroids/src/main/env.ts",
+      "group": "portable-core",
+      "bytes": 7368,
+      "sha256": "1b16e7f12bc0ce8ac10344206c671a8fc18b4f15bc1f5fa01b9b23a09ff42500"
+    },
+    {
+      "upstream_path": "src/main/exec.ts",
+      "path": "reference/chat-on-steroids/src/main/exec.ts",
+      "group": "portable-core",
+      "bytes": 22431,
+      "sha256": "adf3ff28331f9aeaa8c23efcded643eba200fdc41311efddbe8bae2d618fd52d"
+    },
+    {
+      "upstream_path": "src/main/fsops.ts",
+      "path": "reference/chat-on-steroids/src/main/fsops.ts",
+      "group": "portable-core",
+      "bytes": 26908,
+      "sha256": "cdf22e0bc58da0eb8e363590c3312ee11c682c5a2d7a49af3e87527e24132846"
+    },
+    {
+      "upstream_path": "src/main/mcp/artifact-download.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/artifact-download.ts",
+      "group": "mcp-reference",
+      "bytes": 3927,
+      "sha256": "232d4dc1c862996f541243f951a62731f062174bd7bab62f146e5a468f95d7e2"
+    },
+    {
+      "upstream_path": "src/main/mcp/artifact-fetch.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/artifact-fetch.ts",
+      "group": "mcp-reference",
+      "bytes": 7497,
+      "sha256": "643c3882c5088cd428854f479fe77b67371e9f86f61329209fbb27212283bdd1"
+    },
+    {
+      "upstream_path": "src/main/mcp/artifact-target.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/artifact-target.ts",
+      "group": "mcp-reference",
+      "bytes": 6688,
+      "sha256": "05bf56560998d00f5cb6a14b9e550ffd5a97810d29177e347fc11197e787ed91"
+    },
+    {
+      "upstream_path": "src/main/mcp/call-context.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/call-context.ts",
+      "group": "mcp-reference",
+      "bytes": 12829,
+      "sha256": "595c73c3132725b959668247126e016cc448b9306f8a2d7f0f7ffefccdbdf639"
+    },
+    {
+      "upstream_path": "src/main/mcp/code-mode-runtime.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/code-mode-runtime.ts",
+      "group": "mcp-reference",
+      "bytes": 10253,
+      "sha256": "36f9a3f5a473051bb8ecbb164b749bbebcf3f4922014cdbfb118e1e68a3f0772"
+    },
+    {
+      "upstream_path": "src/main/mcp/code-mode-tool.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/code-mode-tool.ts",
+      "group": "mcp-reference",
+      "bytes": 6563,
+      "sha256": "3355fad9d10ed2dbb0aa494ef665a057309bf7c438562bf50960e845f7be4bb8"
+    },
+    {
+      "upstream_path": "src/main/mcp/code-mode-worker.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/code-mode-worker.ts",
+      "group": "mcp-reference",
+      "bytes": 6170,
+      "sha256": "47a21828ee3e53fe30a175a91d9616478859a3170e6175aab5645b85c38fbc48"
+    },
+    {
+      "upstream_path": "src/main/mcp/inbound.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/inbound.ts",
+      "group": "mcp-reference",
+      "bytes": 4427,
+      "sha256": "06b1bc46ffa17c4ddb011d98267f4b587e0e52f6485555c4e202b2745e58cbee"
+    },
+    {
+      "upstream_path": "src/main/mcp/kernel.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/kernel.ts",
+      "group": "mcp-reference",
+      "bytes": 69663,
+      "sha256": "6fbec64ab89636e00f2c1aa959e670e356a4e25b5bb3ea6b765b0a0c38d30ccb"
+    },
+    {
+      "upstream_path": "src/main/mcp/server.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/server.ts",
+      "group": "mcp-reference",
+      "bytes": 21704,
+      "sha256": "8eea8090eee5b3ad7db5209da186dbe524b63e38e41645f454795051a8da1b1f"
+    },
+    {
+      "upstream_path": "src/main/mcp/surfaces.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/surfaces.ts",
+      "group": "mcp-reference",
+      "bytes": 9967,
+      "sha256": "4d8b27e1ca622e5d119891a581c9f69c4182d1094e0cedc472063024bc648ec5"
+    },
+    {
+      "upstream_path": "src/main/mcp/tool-declarations.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/tool-declarations.ts",
+      "group": "mcp-reference",
+      "bytes": 2255,
+      "sha256": "0a44eaa0c7f576933bda7d8c06ed7dd71cf34a88b0424324be84a59125957899"
+    },
+    {
+      "upstream_path": "src/main/mcp/tools-core.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/tools-core.ts",
+      "group": "mcp-reference",
+      "bytes": 116798,
+      "sha256": "f8191b746b5b511990698921a6a24d2d918feefbfb006d9403c359693596faf3"
+    },
+    {
+      "upstream_path": "src/main/mcp/tools.ts",
+      "path": "reference/chat-on-steroids/src/main/mcp/tools.ts",
+      "group": "mcp-reference",
+      "bytes": 4200,
+      "sha256": "47d206f778117cf0350aeec09e1ff8370c902a6f13bda2a9f5dd9cbc899d53ea"
+    },
+    {
+      "upstream_path": "src/main/rawfs.ts",
+      "path": "reference/chat-on-steroids/src/main/rawfs.ts",
+      "group": "portable-core",
+      "bytes": 1947,
+      "sha256": "1efae6384714b11d532b14dade77715a6662bb3980ce57f6060323e762d13725"
+    },
+    {
+      "upstream_path": "src/main/ripgrep.ts",
+      "path": "reference/chat-on-steroids/src/main/ripgrep.ts",
+      "group": "portable-core",
+      "bytes": 1881,
+      "sha256": "706fdd847a6805e1ff191b4fc802b879064156402b50665e0a524a80d0b4e972"
+    },
+    {
+      "upstream_path": "src/main/search.ts",
+      "path": "reference/chat-on-steroids/src/main/search.ts",
+      "group": "portable-core",
+      "bytes": 20468,
+      "sha256": "1d1a72d695897eecabb51f85eff9ad11b884476ed834e645330b08b8275c6a12"
+    },
+    {
+      "upstream_path": "src/main/text-match.ts",
+      "path": "reference/chat-on-steroids/src/main/text-match.ts",
+      "group": "portable-core",
+      "bytes": 13206,
+      "sha256": "bbfb2c748dcacefa2545206d4e036bbd9f95850975a71da62607bd773a5f5c56"
+    },
+    {
+      "upstream_path": "test/code-mode-runtime.test.ts",
+      "path": "reference/chat-on-steroids/test/code-mode-runtime.test.ts",
+      "group": "regression-reference",
+      "bytes": 12259,
+      "sha256": "28dfe2666be2d800ba47d77c7c8ab891d970880b279d663bc023bfe1e153a527"
+    },
+    {
+      "upstream_path": "test/codex-apply-patch-invocation-parity.test.ts",
+      "path": "reference/chat-on-steroids/test/codex-apply-patch-invocation-parity.test.ts",
+      "group": "regression-reference",
+      "bytes": 2881,
+      "sha256": "5f3cd591ba8697c8a63aa12fa57cc972b111468743868a40e8d45c02a2db9df5"
+    },
+    {
+      "upstream_path": "test/codex-apply-patch-move-rollback.test.ts",
+      "path": "reference/chat-on-steroids/test/codex-apply-patch-move-rollback.test.ts",
+      "group": "regression-reference",
+      "bytes": 3484,
+      "sha256": "ed58b61a0e5a7c9f2379c4a7be3d7fb6c0e03c4f2c9ec04a6ef93544b7b5ae25"
+    },
+    {
+      "upstream_path": "test/codex-apply-patch-parity.test.ts",
+      "path": "reference/chat-on-steroids/test/codex-apply-patch-parity.test.ts",
+      "group": "regression-reference",
+      "bytes": 13329,
+      "sha256": "432c861481a4a43ca789a036f19954da89921951b434c30858c7a3519109221e"
+    },
+    {
+      "upstream_path": "test/codex-runtime-parity.test.ts",
+      "path": "reference/chat-on-steroids/test/codex-runtime-parity.test.ts",
+      "group": "regression-reference",
+      "bytes": 21107,
+      "sha256": "b23325a47648e66de691255093541ae4a7120a502b32930beaa0b6655f4f2007"
+    },
+    {
+      "upstream_path": "test/codex-view-image-parity.test.ts",
+      "path": "reference/chat-on-steroids/test/codex-view-image-parity.test.ts",
+      "group": "regression-reference",
+      "bytes": 13606,
+      "sha256": "78c2f1bb9ad14793ad284958c28405c40d4f4672fb0be2dbdb568d0cbe6fe221"
+    },
+    {
+      "upstream_path": "test/command-batch-display.test.ts",
+      "path": "reference/chat-on-steroids/test/command-batch-display.test.ts",
+      "group": "regression-reference",
+      "bytes": 4336,
+      "sha256": "0dc246cd097614928e0edcff6cf89c3aa0834abfe60a550346aa0e3ba7b1e66f"
+    },
+    {
+      "upstream_path": "test/exec-output-budget.test.ts",
+      "path": "reference/chat-on-steroids/test/exec-output-budget.test.ts",
+      "group": "regression-reference",
+      "bytes": 7443,
+      "sha256": "a7be5f607c17c1888f1005f6de766d0e56d1783d147be6729c4108d443913429"
+    },
+    {
+      "upstream_path": "test/fsops.test.ts",
+      "path": "reference/chat-on-steroids/test/fsops.test.ts",
+      "group": "regression-reference",
+      "bytes": 16325,
+      "sha256": "bbff8ed141cfc61303b4d6dcde56db814c9bde6fb16ea0ab8bc284e1e855019f"
+    },
+    {
+      "upstream_path": "test/helpers.ts",
+      "path": "reference/chat-on-steroids/test/helpers.ts",
+      "group": "regression-reference",
+      "bytes": 3983,
+      "sha256": "831d37e582d3c2542c2f673d022f17a1dc34d3a1d6cc920bfa321b2b38f531c7"
+    },
+    {
+      "upstream_path": "test/mcp-inbound.test.ts",
+      "path": "reference/chat-on-steroids/test/mcp-inbound.test.ts",
+      "group": "regression-reference",
+      "bytes": 1413,
+      "sha256": "420ac1b4c4f2e11c86d9eae23ffa66eb0c6c2c8d76f122ffbc107da267486453"
+    },
+    {
+      "upstream_path": "test/read-backend.test.ts",
+      "path": "reference/chat-on-steroids/test/read-backend.test.ts",
+      "group": "regression-reference",
+      "bytes": 9258,
+      "sha256": "03c0a3b6b2208f28fbd642e6baa18d8ff266b3aa672015cb3d31fc798917bdc4"
+    },
+    {
+      "upstream_path": "test/text-match.test.ts",
+      "path": "reference/chat-on-steroids/test/text-match.test.ts",
+      "group": "regression-reference",
+      "bytes": 5661,
+      "sha256": "1a55b2164be325c428b2525130c3b6d1f847232d24ab67e109bec5b6fabd2cb6"
+    },
+    {
+      "upstream_path": "test/unified-exec-mutex.test.ts",
+      "path": "reference/chat-on-steroids/test/unified-exec-mutex.test.ts",
+      "group": "regression-reference",
+      "bytes": 4109,
+      "sha256": "d86fc0e1b1a90ca8a54028ecdfbcf61f529453876d749607df64a0f950bfbb7a"
+    }
+  ]
+}

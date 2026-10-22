@@ -1,0 +1,13 @@
+Agent Host MCP contains selected, unmodified source files from Chat On Steroids
+v2.1.11, commit f51acbccdd734f524799ea92bb747be765fba1e4.
+
+Upstream: https://github.com/totec448-spec/chat-on-steroids
+Copyright (c) 2026 Chat On Steroids contributors. MIT License; see LICENSE.
+
+Some upstream modules identify themselves as ports or adaptations of OpenAI Codex.
+Preserve those source headers. The upstream Codex LICENSE, NOTICE and provenance
+are retained under reference/chat-on-steroids/docs/licenses/codex/.
+Those Apache-2.0 terms and notices remain applicable to the derived portions;
+the repository's MIT license does not replace third-party license obligations.
+
+This project is independent of Chat On Steroids and OpenAI. No endorsement is implied.
