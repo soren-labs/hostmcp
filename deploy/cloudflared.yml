@@ -1,0 +1,9 @@
+# Example for a locally-managed named Tunnel. Replace all example values.
+# HostMCP public-url must match https://mcp.example.com.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: /absolute/path/to/cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+
+ingress:
+  - hostname: mcp.example.com
+    service: http://127.0.0.1:8787
+  - service: http_status:404

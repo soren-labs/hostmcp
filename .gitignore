@@ -21,3 +21,12 @@ state/
 sessions/
 secrets/
 local/
+bin/
+release/
+*.test
+*.token
+*.owner-token
+*.invite.json
+hub.json
+agent.json
+*.json.lock

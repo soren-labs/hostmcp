@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Archive version (manual branch runs build artifacts only)'
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      GOFLAGS: -mod=readonly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: python3 scripts/verify-source-import.py
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOFLAGS: -mod=readonly
+      RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.event.inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build release archives and checksums
+        run: bash scripts/release.sh "$RELEASE_VERSION"
+      - name: Verify archive installation
+        run: |
+          release_version="${RELEASE_VERSION#v}"
+          sh scripts/install.sh --version "$RELEASE_VERSION" \
+            --archive "dist/hostmcp_${release_version}_linux_amd64.tar.gz" \
+            --checksums dist/SHA256SUMS --prefix "$RUNNER_TEMP/hostmcp-bin"
+          "$RUNNER_TEMP/hostmcp-bin/hostmcp" version
+      - name: Reject a corrupted archive
+        run: |
+          release_version="${RELEASE_VERSION#v}"
+          cp "dist/hostmcp_${release_version}_linux_amd64.tar.gz" "$RUNNER_TEMP/tampered.tar.gz"
+          printf 'tampered' >> "$RUNNER_TEMP/tampered.tar.gz"
+          if sh scripts/install.sh --version "$RELEASE_VERSION" \
+            --archive "$RUNNER_TEMP/tampered.tar.gz" --checksums dist/SHA256SUMS \
+            --prefix "$RUNNER_TEMP/hostmcp-rejected"; then
+            exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/hostmcp-rejected/hostmcp"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-archives
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-archives
+          path: dist
+      - name: Publish verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "HostMCP $GITHUB_REF_NAME" --generate-notes
