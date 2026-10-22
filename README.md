@@ -1,4 +1,4 @@
-# Agent Host MCP
+# HostMCP
 
 面向 Linux 和 macOS 的无界面 MCP 主机工具项目，目标是让支持 MCP 的 agent
 使用服务进程所在用户的完整文件、Shell 和进程权限。

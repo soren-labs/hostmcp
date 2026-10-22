@@ -1,4 +1,4 @@
-# Agent Host MCP
+# HostMCP
 
 Build a small headless MCP host for Linux and macOS. The user explicitly wants tools
 to operate with the full ordinary privileges of the OS account running the service.
