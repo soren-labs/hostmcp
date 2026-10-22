@@ -33,9 +33,10 @@ HostMCP 专属临时目录，不访问正在运行的 Chat On Steroids 安装或
 | Hub 重启与在途命令 | passed | 3ba9919 修复后三机真实复验，39.246s；在途调用明确 unknown outcome，三台自动重连；原 session 的 request_id 重试复用，stdout 完整保留 survived，marker 仅 started/finished 两行 |
 | systemd / launchd 服务 | passed | 三台实际安装和激活；Linux 注销后用户服务持续运行；Mac LaunchAgent 在当前 GUI 登录会话运行 |
 | systemd 路径和失败恢复 | passed | Ubuntu systemd 259 真实解析特殊字符路径；检查安装后运行状态；Mac 未加载的生成 plist 能安全卸载 |
-| 家庭 Ubuntu 作为 Hub | pending | 正在执行仅回环监听 + 独立 Quick Tunnel 的公网验收 |
+| 家庭 Ubuntu 作为 Hub | partial | 独立回环 Hub 经 Quick Tunnel 的公网 healthz、一次性邀请注册、Agent 公网连接成功；Mac 对新域名 initialize 遇到 EOF，跨机器写读尚未完成；本轮服务与秘密已清理 |
 | 安装器与发布脚本 | passed | 语法检查；四平台本地交叉构建；正确 archive 安装；篡改、缺失/重复校验值及符号链接 binary 被拒 |
-| Release 资产 | pending | 等待 tag workflow 的双平台验证、四平台归档、校验安装和发布结果 |
+| Release 资产 | passed | [v0.1.0](https://github.com/soren-labs/hostmcp/releases/tag/v0.1.0) 已公开，commit d4288e87da57；[发布流水线](https://github.com/soren-labs/hostmcp/actions/runs/39777158515) 双平台验证、四平台构建、安装校验及发布全部通过；四包 API SHA-256 与清单一致 |
+| 公开 Release 安装实机验收 | partial | Mac 已从固定 tag 安装脚本公开下载并校验 v0.1.0 / d4288e87da57，LaunchAgent running；两台 Linux 的最终升级状态待本地连接恢复后回读，未将未知结果标为通过 |
 | Named Tunnel、自有域名 Caddy、Docker Hub | not tested | 已提供配置和步骤；未将模板语法检查标为实机部署通过 |
 | ChatGPT 云端、其它 MCP 宿主 | not verified | 不从通用协议测试推断任意宿主兼容；首版没有完整 OAuth 登录服务 |
 
