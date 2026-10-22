@@ -172,9 +172,10 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 		go func(msg protocol.Message) {
 			defer workers.Done()
 			defer func() { <-slots }()
-			// Deliberately use the process lifetime context, not the connection context:
-			// disconnecting must not cancel or replay a command already dispatched.
-			callCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+			// The executor owns OS process lifetimes separately from each Call's wait.
+			// Cancel abandoned polls with this connection so they cannot consume later
+			// output before a reconnected client can collect it. Never replay the call.
+			callCtx, cancel := context.WithTimeout(connectionCtx, 40*time.Second)
 			result, err := executor.Call(callCtx, msg.Principal, msg.Tool, msg.Args)
 			cancel()
 			if err != nil {
