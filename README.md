@@ -12,9 +12,10 @@ IP 时，可用 Cloudflare Tunnel 发布 Hub。
 
 ## 版本与范围
 
-本分支正在交付 **0.1.0 运行时**。源码、发布流程和已完成的验证分别记录在
-[验证记录](docs/validation.md)中；只有 GitHub Releases 中实际存在的资产才是
-已发布版本。下文首先提供从源码构建的路径。
+当前版本是 **v0.1.0**：一个可以原生运行、连接多台设备的独立 MCP 项目。
+[Releases](https://github.com/soren-labs/hostmcp/releases) 提供 Linux/macOS 的
+amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/validation.md)
+记录真实三机测试、第三方客户端接入、CI 与仍未验证的部署方式。
 
 首版针对个人或单个信任域的自部署实例：静态 bearer 认证、Linux/macOS 原生
 Agent、本地 stdio 和远程 Streamable HTTP。OAuth、多租户 SaaS、桌面键鼠控制、
@@ -39,7 +40,23 @@ Hub 负责认证、设备路由和 MCP 协议，不执行设备命令。要管�
 在该机器上运行一个独立 Agent。构建、测试和其他重任务发生在选定设备上；Hub
 不需要运行大模型。低配机器的实际占用以[验证记录](docs/validation.md)为准。
 
-## 从源码开始
+## 安装
+
+使用预编译版本无需安装 Go。下载安装脚本，然后指定版本：
+
+```sh
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.1.0/scripts/install.sh \
+  -o hostmcp-install.sh
+sh hostmcp-install.sh --version v0.1.0
+export PATH="$HOME/.local/bin:$PATH"
+hostmcp version
+```
+
+安装器检测 Linux/macOS 与 amd64/arm64，下载对应归档并校验 SHA-256，安装到
+**~/.local/bin**。Hub 和设备 Agent 使用同一个可执行文件；服务配置在后续步骤完成。
+
+### 从源码构建
 
 需要 Go 1.25 或更新的兼容版本、Git；源码完整性检查需要 Python 3。
 
@@ -58,16 +75,6 @@ mkdir -p "$HOME/.local/bin"
 install -m 0755 ./build/hostmcp "$HOME/.local/bin/hostmcp"
 export PATH="$HOME/.local/bin:$PATH"
 ```
-
-有正式 Release 后，下载仓库中的安装脚本并指定确实存在的版本：
-
-```sh
-sh scripts/install.sh --version v0.1.0
-```
-
-脚本检测 Linux/macOS 与 amd64/arm64，校验 SHA-256，再安装到用户的
-**~/.local/bin**。它不提权、不修改 sudoers，也不自动启动服务。未发布该版本时，
-下载失败是预期行为；请使用源码构建。
 
 ### 1. 初始化 Hub
 

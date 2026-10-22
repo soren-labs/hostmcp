@@ -43,6 +43,9 @@ belong in docs/architecture.md.
 
 ## Release packaging
 
+The release workflow pins Go 1.27.3 for validation and archive builds. Runtime CI
+uses the minimum Go version declared in go.mod to check baseline compatibility.
+
 The packaging script builds four archives and a SHA256SUMS file without publishing:
 
 ```sh

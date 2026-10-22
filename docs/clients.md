@@ -108,9 +108,50 @@ hostmcp token create --config /absolute/path/hub.json \
 | 官方 MCP SDK 与 HostMCP 内置 call | 以 validation.md 的实际测试结果为准 |
 | 通用 stdio 客户端 | 已提供配置方式；具体宿主验证另行记录 |
 | 自定义 bearer 的 remote MCP 客户端 | 协议目标；实际宿主和版本须分别验证 |
-| Codex / Claude Code | 可按其 stdio 或 header 功能配置；未记录实测前不宣称已验证 |
+| Claude Code 2.1.292 | 2026-10-22 实测通过：stdio 启动 hostmcp connect，经公网 HTTPS Hub 列出 3 台在线设备，并分别查询身份；实际 4 次工具调用均成功 |
+| Codex / Claude Desktop | 可按各自的 stdio 或 header 功能配置；尚未完成对应宿主验收 |
 | ChatGPT 云端自定义 MCP 接入 | 未验证；不能假定支持任意静态 bearer header |
 | OAuth-only 客户端 | 首版没有完整 OAuth 服务，不能据此声称可直连 |
 
 最新 MCP 规范与旧版本存在握手、session 和流处理差异。项目使用官方 SDK，
 实际协商版本应作为验收证据记录，不把“有 /mcp endpoint”当作所有协议版本兼容。
+
+### 复现 Claude Code 隔离验收
+
+将上方“stdio 桥接远程 Hub”的 JSON 保存为 /absolute/path/hostmcp-client.json，
+替换其中的示例域名、可执行文件路径和 token 文件路径。token 正文保留在私有
+文件中。使用已完成登录的 Claude Code 2.1.292；先用 claude --help 核对当前版本
+支持这些参数，再在独立临时目录执行：
+
+```sh
+(
+  set -eu
+  hostmcp_audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/hostmcp-claude.XXXXXX")"
+  trap 'rmdir "$hostmcp_audit_dir" 2>/dev/null || true' EXIT
+  cd "$hostmcp_audit_dir"
+  claude --print \
+    --strict-mcp-config --mcp-config /absolute/path/hostmcp-client.json \
+    --tools '' \
+    --allowedTools 'mcp__hostmcp__list_devices,mcp__hostmcp__device_info' \
+    --disallowedTools \
+      mcp__hostmcp__exec_command mcp__hostmcp__write_stdin \
+      mcp__hostmcp__list_processes mcp__hostmcp__terminate_process \
+      mcp__hostmcp__read mcp__hostmcp__write_file \
+      mcp__hostmcp__apply_patch mcp__hostmcp__view_image \
+    --setting-sources '' --disable-slash-commands --no-chrome \
+    --no-session-persistence --permission-mode dontAsk \
+    --max-budget-usd 0.5 --output-format stream-json --verbose \
+    '只做只读 MCP 验收：调用 list_devices 一次，再对返回的三台在线设备分别调用 device_info 一次。仅使用这两个工具，不执行命令或访问文件。根据真实返回值总结设备 ID、OS、用户名和 UID；设备不足或调用失败时据实报告。'
+)
+```
+
+验收时检查结构化事件：hostmcp 的连接状态应为 connected，且应存在一次
+list_devices 和三次 device_info 的 tool_use，以及按 ID 对应的四个成功
+tool_result。模型的文字总结本身不构成通过证据。上述配置禁用内置工具，并显式
+拒绝其他 HostMCP 工具；不修改全局 MCP 配置，也不使用跳过权限的选项。
+
+本次实际验收符合这些条件，permission_denials 为空、客户端退出码为 0。测试
+路径使用临时 HTTPS Tunnel，结果仅覆盖这个版本的 Claude Code 与 stdio connect
+组合；不推定其他 Claude Code 版本、Claude Desktop、正式 named Tunnel 或
+ChatGPT 云端 OAuth 接入已完成验收。登录、计费或组织策略阻止测试时，应记录
+该次未通过或未完成，不改变这些限制来取得成功结果。

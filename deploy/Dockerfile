@@ -1,11 +1,12 @@
 # Hub only. Run device Agents natively on the target Linux/macOS account.
-FROM golang:1.25-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download all
 COPY . .
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# BuildKit supplies the target platform; do not force an amd64 binary on arm64.
+ARG TARGETOS
+ARG TARGETARCH
 ARG VERSION=0.1.0
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
