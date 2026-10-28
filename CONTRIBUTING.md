@@ -21,6 +21,38 @@ processes. Never connect tests to an existing Chat On Steroids installation or r
 its user data. Keep production configuration, real tokens and device details out of
 fixtures and logs.
 
+### Optional 200-node connection/routing check
+
+Normal CI skips this test. Point it at an already built executable to start a
+separate temporary Hub and 200 simulated WebSocket peers:
+
+```sh
+HOSTMCP_SCALE_BINARY="$PWD/build/hostmcp" \
+  go test ./internal/hub -run '^TestScaleAccountNodes$' -count=1 -v -timeout=2m
+```
+
+The check verifies all 200 online entries, 200 correctly routed authenticated MCP
+calls with eight requests in flight, and 20 disconnected/reconnected peers followed
+by another route check. It respects the Hub's current eight-request/handshake
+resource bound. It never uses an existing Hub, credentials, inventory or endpoint.
+Temporary state and processes are cleaned up by the test.
+
+On Linux, its JSON `HOSTMCP_SCALE_REPORT` includes observed RSS and CPU samples
+for only the separate Hub process. The simulated peers run in the test process.
+These are bounded loopback protocol/load measurements, not 200 physical hosts,
+200 simultaneous native workloads, TLS proxy resource measurements or a long-term
+availability guarantee. Test actual OS-account execution separately with real nodes.
+
+To run on a low-memory Linux VPS without compiling there, build the test executable
+on a development machine and copy it alongside the matching HostMCP binary:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c \
+  -o build/hostmcp-hub-scale.test ./internal/hub
+HOSTMCP_SCALE_BINARY=/absolute/path/hostmcp \
+  ./hostmcp-hub-scale.test -test.run '^TestScaleAccountNodes$' -test.v -test.timeout 2m
+```
+
 ## Changes and tests
 
 - Preserve normal OS user permissions and real path semantics. Authentication,
@@ -49,7 +81,7 @@ uses the minimum Go version declared in go.mod to check baseline compatibility.
 The packaging script builds four archives and a SHA256SUMS file without publishing:
 
 ```sh
-bash scripts/release.sh v0.1.0
+bash scripts/release.sh v0.2.0
 ```
 
 Archive names are hostmcp_VERSION_OS_ARCH.tar.gz for linux/darwin and amd64/arm64.
@@ -58,8 +90,8 @@ installer verifies the selected archive checksum and writes to a user-owned pref
 It can be tested without a network download:
 
 ```sh
-sh scripts/install.sh --version v0.1.0 \
-  --archive dist/hostmcp_0.1.0_linux_amd64.tar.gz \
+sh scripts/install.sh --version v0.2.0 \
+  --archive dist/hostmcp_0.2.0_linux_amd64.tar.gz \
   --checksums dist/SHA256SUMS --prefix /tmp/hostmcp-install-check
 ```
 

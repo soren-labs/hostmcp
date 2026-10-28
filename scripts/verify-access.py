@@ -80,16 +80,22 @@ def run(args):
 
         root_info = admin.call("device_info", device=args.root_node)
         ordinary_info = ordinary.call("device_info", device=args.ordinary_node)
-        check(root_info.get("hostname") == ordinary_info.get("hostname"),
-              "root and ordinary nodes must refer to the same host")
-        check(int(root_info["uid"]) == 0, "admin node is not root")
-        check(int(ordinary_info["uid"]) != 0, "ordinary node is root")
+        root_host = root_info.get("device", {}).get("hostname")
+        ordinary_host = ordinary_info.get("device", {}).get("hostname")
+        check(isinstance(root_host, str) and bool(root_host)
+              and isinstance(ordinary_host, str) and bool(ordinary_host)
+              and root_host == ordinary_host,
+              "root and ordinary nodes must report the same nonempty hostname")
+        check(int(root_info["uid"]) == 0 and int(root_info["euid"]) == 0, "admin node is not root")
+        check(int(ordinary_info["uid"]) != 0 and int(ordinary_info["euid"]) != 0,
+              "ordinary node has root UID or effective UID")
         if args.expected_ordinary_uid is not None:
             check(int(ordinary_info["uid"]) == args.expected_ordinary_uid, "ordinary UID differs from expected")
         check(admin.execute(args.root_node, "id -u") == "0", "actual root command UID differs")
         actual_uid = ordinary.execute(args.ordinary_node, "id -u")
-        check(actual_uid == str(ordinary_info["uid"]), "actual ordinary command UID differs")
-        report.update(root_uid="0", ordinary_uid=actual_uid)
+        check(actual_uid == str(ordinary_info["euid"]), "actual ordinary command effective UID differs")
+        report.update(root_uid="0", root_euid="0", ordinary_uid=str(ordinary_info["uid"]),
+                      ordinary_euid=actual_uid)
         report["checks"].append("native_execution_uids")
 
         denied = ordinary.raw("exec_command", {"device": args.root_node, "cmd": "id -u",
