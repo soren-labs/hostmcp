@@ -169,7 +169,13 @@ func bridgeServer(ctx context.Context, session *mcp.ClientSession) (*mcp.Server,
 			out, err := session.CallTool(callctx, &mcp.CallToolParams{Name: copyTool.Name, Arguments: r.Params.Arguments})
 			if err != nil {
 				result := &mcp.CallToolResult{}
-				result.SetError(fmt.Errorf("remote call failed; outcome may be unknown; inspect list_processes before retrying: %w", err))
+				message := "remote call failed; execution outcome may be unknown; inspect list_processes before retrying"
+				if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "429") {
+					message = "remote Hub rejected the request as busy (HTTP 503/429); tool was not dispatched; retry with backoff"
+				} else if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+					message = "remote Hub denied authentication or access (HTTP 401/403); tool was not dispatched"
+				}
+				result.SetError(fmt.Errorf("%s: %w", message, err))
 				return result, nil
 			}
 			return out, nil

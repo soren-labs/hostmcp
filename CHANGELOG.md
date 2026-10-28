@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.2.1 — 2026-10-28
+
+Repair release after two independent acceptance reviews of v0.2.0. The native
+machine/account permission model, wire version, and existing credentials remain
+compatible. No extra command or directory restrictions are introduced.
+
+### Fixed
+
+- Native path traversal preserves symlink components followed by `..`, avoiding
+  accidental reads and writes to a different existing file.
+- `apply_patch` updates existing inodes without replacing their owner, hard
+  links, attributes or permission bits; adds safer error handling, source
+  verification and tests for root editing files owned by another account.
+- Stdin backpressure no longer kills a session; queued input remains ordered
+  and visible to callers. Process-lifetime limitations are documented.
+- The Hub reserves capacity for distinct client credentials and device
+  enrollment. One client running long polls no longer monopolizes all requests.
+- Authentication attempts, device connection lifecycle and tool dispatch
+  outcomes produce token-free structured logs.
+- Temporary Hub configuration read errors no longer disconnect known nodes;
+  dispatch still fails closed until configuration is readable again.
+- Credential recreation under the same client display ID does not inherit
+  the previous credential's session identity. Revoked device agents back off
+  instead of reconnecting every three seconds.
+- systemd `ExecStart` correctly escapes dollar characters in literal paths;
+  Compose images default to the correct release version.
+- Added cross-platform regression tests for these scenarios and clarified
+  enrollment error diagnostics, empty inventories, host allowlist clearing,
+  and re-enrollment instructions.
+
+### Limits
+
+- A patch spanning multiple files is not a distributed transaction. The
+  repository does not promise durable Agent sessions after process restarts.
+- High availability, OAuth, Windows and multi-tenant authorization remain out
+  of scope. Audit logs are not immutable or centrally retained by default.
+
 ## v0.2.0 — 2026-10-28
 
 Account-node deployment for Linux and macOS. One registered node represents one

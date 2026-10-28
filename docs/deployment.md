@@ -156,7 +156,7 @@ macOS 文件访问仍受 TCC 等机制控制。Agent 运行于当前 UID 不能�
 
 ## Linux / macOS 系统服务与多账户
 
-v0.2.0 可由管理员安装 systemd system service 或 macOS LaunchDaemon。执行
+v0.2.1 可由管理员安装 systemd system service 或 macOS LaunchDaemon。执行
 账户由 `--user` 显式指定，root 也使用相同机制。每个账户节点使用独立的服务名
 和配置文件，完整注册过程见[账户节点与权限配置](account-nodes.md)。
 

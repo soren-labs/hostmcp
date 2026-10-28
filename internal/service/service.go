@@ -26,6 +26,13 @@ func unitQuote(s string) string {
 	return "\"" + s + "\""
 }
 
+// systemd expands $NAME and ${NAME} in ExecStart= even when double-quoted.
+// Doubling a dollar is its documented escape for literal argument text. Do
+// not apply this to Environment=, whose parsing rules differ.
+func unitExecQuote(s string) string {
+	return unitQuote(strings.ReplaceAll(s, "$", "$$"))
+}
+
 // WorkingDirectory= accepts a path, not a quoted command-line word. Its parser
 // expands percent specifiers but does not unquote or unescape backslashes. A /.
 // suffix protects terminal whitespace or a backslash from INI trimming/continuation.
@@ -73,7 +80,7 @@ func renderBase(goos, name, role, binary, configPath, home, path string) (string
 		}
 		// The agent intentionally has no filesystem/privilege sandbox: it acts as
 		// this user's normal account. Only the optional Hub container is isolated.
-		return fmt.Sprintf("# %s\n[Unit]\nDescription=HostMCP %s\nAfter=network-online.target\n\n[Service]\nType=exec\nExecStart=%s %s %s --config %s\nWorkingDirectory=%s\nEnvironment=%s\nEnvironment=%s\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=mixed\nUMask=0077\n\n[Install]\nWantedBy=default.target\n", marker, role, unitQuote(binary), role, action, unitQuote(configPath), unitDirectory(home), unitQuote("HOME="+home), unitQuote("PATH="+path)), nil
+		return fmt.Sprintf("# %s\n[Unit]\nDescription=HostMCP %s\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=exec\nExecStart=%s %s %s --config %s\nWorkingDirectory=%s\nEnvironment=%s\nEnvironment=%s\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=mixed\nUMask=0077\n\n[Install]\nWantedBy=default.target\n", marker, role, unitExecQuote(binary), role, action, unitExecQuote(configPath), unitDirectory(home), unitQuote("HOME="+home), unitQuote("PATH="+path)), nil
 	}
 	if goos == "darwin" {
 		label := "com.hostmcp." + name
@@ -160,7 +167,9 @@ func startSystemdScoped(name string, system bool, run commandRun, query commandQ
 	}
 	// Type=exec waits for chdir/exec failures. Give immediate configuration or bind
 	// failures a chance to settle before checking the actual manager state too.
-	time.Sleep(150 * time.Millisecond)
+	// A fast 150 ms check can race an agent's first authentication failure.
+	// This is an initial liveness probe, not a promise of indefinite uptime.
+	time.Sleep(time.Second)
 	out, err := query("systemctl", systemdArgs(system, "show", "--no-pager", "--property=LoadState,ActiveState,SubState,Result", name+".service")...)
 	if err != nil {
 		return fmt.Errorf("cannot verify service startup: %w", err)

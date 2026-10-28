@@ -31,7 +31,7 @@ import (
 	"github.com/soren-labs/hostmcp/internal/service"
 )
 
-var version = "0.2.0"
+var version = "0.2.1"
 var commit = "development"
 var buildTime = "unknown"
 
@@ -223,10 +223,19 @@ func hubCommand(ctx context.Context, args []string) error {
 			if *listen != "" {
 				h.Listen = *listen
 			}
-			if *allowedHosts != "" {
+			setHosts, setOrigins := false, false
+			f.Visit(func(v *flag.Flag) {
+				if v.Name == "allow-hosts" {
+					setHosts = true
+				}
+				if v.Name == "allow-origins" {
+					setOrigins = true
+				}
+			})
+			if setHosts {
 				h.AllowedHosts = commaList(*allowedHosts)
 			}
-			if *origins != "" {
+			if setOrigins {
 				h.AllowedOrigins = commaList(*origins)
 			}
 			return nil
@@ -338,11 +347,11 @@ func deviceCommand(args []string) error {
 		if err != nil {
 			return err
 		}
-		var devices []string
+		devices := []string{}
 		for _, d := range h.Devices {
 			devices = append(devices, d.ID)
 		}
-		var invites []map[string]any
+		invites := []map[string]any{}
 		for _, i := range h.Invitations {
 			invites = append(invites, map[string]any{"device_id": i.DeviceID, "expires_at": i.ExpiresAt})
 		}
@@ -523,6 +532,9 @@ func agentCommand(ctx context.Context, args []string) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
+			if resp.StatusCode == http.StatusServiceUnavailable {
+				return errors.New("enrollment not dispatched: Hub is busy (HTTP 503); retry this invitation after a short delay")
+			}
 			return fmt.Errorf("enrollment rejected (HTTP %d); check invitation, expiry and hub URL", resp.StatusCode)
 		}
 		var a config.Agent

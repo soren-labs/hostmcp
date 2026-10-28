@@ -53,7 +53,10 @@ func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info
 		}
 		var authErr *authorizationError
 		if errors.As(err, &authErr) {
-			return err
+			// A stale/revoked credential must not restart-loop every three
+			// seconds under systemd/launchd. It may also be a temporary proxy
+			// rejection, so retry with a deliberately long capped backoff.
+			delay = max(delay, 60*time.Second)
 		}
 		log.Printf("device %s disconnected; reconnecting (%v)", cfg.DeviceID, err)
 		if time.Since(start) > time.Minute {
@@ -67,7 +70,11 @@ func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info
 			return nil
 		case <-timer.C:
 		}
-		delay = min(delay*2, 30*time.Second)
+		maxDelay := 30 * time.Second
+		if errors.As(err, &authErr) {
+			maxDelay = 15 * time.Minute
+		}
+		delay = min(delay*2, maxDelay)
 	}
 }
 

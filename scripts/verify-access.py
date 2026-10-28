@@ -15,7 +15,13 @@ import subprocess
 import sys
 import time
 
-from smoke import check, unpack
+# An isolated Python interpreter (-I) deliberately omits the script directory
+# from sys.path. Resolve the adjacent, reviewed helper by its explicit path.
+import pathlib
+import runpy
+
+_smoke = runpy.run_path(str(pathlib.Path(__file__).resolve().with_name("smoke.py")))
+check, unpack = _smoke["check"], _smoke["unpack"]
 
 
 def fixture_path(path):

@@ -303,6 +303,9 @@ func (r *Runtime) defaultShell() string {
 	return "/bin/sh"
 }
 
+// path makes a tool path absolute without resolving it. The kernel must see
+// every component: "link/.." is the parent of the symlink's target, not the
+// directory containing the link, so lexical cleaning would select another file.
 func (r *Runtime) path(value, cwd string) (string, error) {
 	if value == "" {
 		return "", errors.New("path must not be empty")
@@ -315,7 +318,7 @@ func (r *Runtime) path(value, cwd string) (string, error) {
 			return r.user.HomeDir
 		}
 		if strings.HasPrefix(p, "~/") {
-			return filepath.Join(r.user.HomeDir, p[2:])
+			return nativeJoin(r.user.HomeDir, p[2:])
 		}
 		return p
 	}
@@ -325,12 +328,70 @@ func (r *Runtime) path(value, cwd string) (string, error) {
 		cwd = r.cwd
 	}
 	if !filepath.IsAbs(cwd) {
-		cwd = filepath.Join(r.cwd, cwd)
+		cwd = nativeJoin(r.cwd, cwd)
 	}
 	if !filepath.IsAbs(value) {
-		value = filepath.Join(cwd, value)
+		value = nativeJoin(cwd, value)
 	}
-	return filepath.Clean(value), nil
+	return tidyPath(value), nil
+}
+
+func nativeJoin(base, name string) string {
+	if name == "" {
+		return base
+	}
+	if strings.HasSuffix(base, "/") {
+		return base + name
+	}
+	return base + "/" + name
+}
+
+// tidyPath removes only spellings that cannot change traversal: repeated
+// slashes and interior "." components. It never interprets "..", and keeps a
+// final "/" or "/." because both require the named object to be a directory.
+func tidyPath(p string) string {
+	parts := strings.Split(p, "/")
+	kept := make([]string, 0, len(parts))
+	for i, part := range parts {
+		if part == "" || part == "." && i != len(parts)-1 {
+			continue
+		}
+		kept = append(kept, part)
+	}
+	out := strings.Join(kept, "/")
+	if strings.HasPrefix(p, "/") {
+		out = "/" + out
+	}
+	if strings.HasSuffix(p, "/") && out != "/" {
+		out += "/"
+	}
+	if out == "" {
+		out = "."
+	}
+	return out
+}
+
+// nativeDir returns the directory component of an unresolved path without
+// cleaning it, so creating parents follows the same traversal as the leaf.
+func nativeDir(p string) string {
+	trimmed := strings.TrimRight(p, "/")
+	i := strings.LastIndexByte(trimmed, '/')
+	if i < 0 {
+		return "."
+	}
+	if i == 0 {
+		return "/"
+	}
+	return trimmed[:i]
+}
+
+func hasDotDot(p string) bool {
+	for _, part := range strings.Split(p, "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func obj(props map[string]any, required ...string) map[string]any {
@@ -353,14 +414,14 @@ func boolean(description string) map[string]any {
 func Tools() []protocol.Tool {
 	return []protocol.Tool{
 		{Name: "device_info", Description: "Report the native OS account, device, working directory and effective UID. No secrets or environment variables are dumped.", ReadOnly: true, InputSchema: obj(map[string]any{})},
-		{Name: "exec_command", Description: "Run a shell command as the device's OS account. Returns a durable-in-agent-memory session_id, bounded combined stdout/stderr and actual status. Poll with write_stdin. Network disconnect does not undo execution. Existing OS permissions and sudo policy apply. Sessions survive network reconnects, but not device-agent restarts.", InputSchema: obj(map[string]any{
+		{Name: "exec_command", Description: "Run a shell command as the device's OS account. Returns a durable-in-agent-memory session_id, bounded combined stdout/stderr and actual status. Poll with write_stdin. Network disconnect does not undo execution. Existing OS permissions and sudo policy apply. Sessions survive network reconnects, but not device-agent restarts. The command runs in its own process group: when its shell exits, times out or is terminated, processes left in that group (including `cmd &` and nohup jobs) are stopped. Keep a session open (timeout_seconds 0) or use the OS service manager (systemd-run, launchctl) for daemons; restarting the agent service also stops them.", InputSchema: obj(map[string]any{
 			"cmd": str("Shell command to execute"), "cwd": str("Native working directory; defaults to agent startup directory"), "env": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "Overrides merged over the agent's inherited environment"}, "shell": str("Shell executable; default SHELL or /bin/sh"), "login": boolean("Use a login shell; defaults to false so explicit cwd/env are preserved"), "tty": boolean("Allocate an interactive POSIX PTY"), "yield_time_ms": integer("Wait for initial output, up to this deadline; default 1000", 0, 30000), "timeout_seconds": integer("Kill the command's process group after this duration; default 3600; zero disables the execution deadline", 0, 86400), "max_output_bytes": integer("Output bytes returned per call; default 65536; unread bytes remain buffered", 1024, 262144), "request_id": str("Optional idempotency key, max 128 characters, scoped to this principal. Tombstones remain for 24 hours after session recycling, with a 4096-key limit. Not durable across agent restarts")}, "cmd")},
-		{Name: "write_stdin", Description: "Read new output or send input to an owned session. Reads drain only returned bytes. Completed sessions expire after 30 minutes; completed sessions with fully consumed output may be recycled sooner under capacity pressure. Use signal for INT/TERM/KILL; close_stdin sends EOF.", InputSchema: obj(map[string]any{"session_id": str("Session returned by exec_command"), "chars": str("Input text, at most 64 KiB"), "signal": map[string]any{"type": "string", "enum": []string{"INT", "TERM", "KILL"}}, "close_stdin": boolean("Close piped stdin, or send Ctrl-D to a PTY"), "yield_time_ms": integer("Wait for new output; default 1000", 0, 30000), "max_output_bytes": integer("Maximum bytes to drain; default 65536", 1024, 262144), "rows": integer("Resize PTY rows (provide with cols)", 1, 500), "cols": integer("Resize PTY columns (provide with rows)", 1, 500)}, "session_id")},
+		{Name: "write_stdin", Description: "Read new output or send input to an owned session. Reads drain only returned bytes. Input is never a reason to stop the process: if it does not read all input within 5 seconds, the rest stays queued in order and the result reports stdin_pending until it is read; send more input after that. Completed sessions expire after 30 minutes; completed sessions with fully consumed output may be recycled sooner under capacity pressure. Use signal for INT/TERM/KILL; close_stdin sends EOF.", InputSchema: obj(map[string]any{"session_id": str("Session returned by exec_command"), "chars": str("Input text, at most 64 KiB"), "signal": map[string]any{"type": "string", "enum": []string{"INT", "TERM", "KILL"}}, "close_stdin": boolean("Close piped stdin, or send Ctrl-D to a PTY"), "yield_time_ms": integer("Wait for new output; default 1000", 0, 30000), "max_output_bytes": integer("Maximum bytes to drain; default 65536", 1024, 262144), "rows": integer("Resize PTY rows (provide with cols)", 1, 500), "cols": integer("Resize PTY columns (provide with rows)", 1, 500)}, "session_id")},
 		{Name: "list_processes", Description: "List only the calling principal's managed command sessions and real running/exit state. This is session ownership, not isolation between principals sharing the same OS account.", ReadOnly: true, InputSchema: obj(map[string]any{})},
 		{Name: "terminate_process", Description: "Stop an owned command's POSIX process group with TERM followed by KILL after a grace period, or KILL immediately. Daemons which deliberately detach into another session are outside this process group.", InputSchema: obj(map[string]any{"session_id": str("Owned session identifier"), "signal": map[string]any{"type": "string", "enum": []string{"TERM", "KILL"}}}, "session_id")},
-		{Name: "read", Description: "Read real OS paths as bounded text, base64 bytes, directory entries or metadata. Follows normal symlink/permission semantics. Text line ranges scan at most 16 MiB; results report truncation. No approved-directory list.", ReadOnly: true, InputSchema: obj(map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "minItems": 1, "maxItems": 16}, "cwd": str("Base for relative paths"), "start_line": integer("First text line, inclusive; default 1", 1, 10000000), "end_line": integer("Last text line, inclusive; zero means no line limit", 0, 10000000), "max_bytes": integer("Total returned content budget, default 65536; maximum 1 MiB", 1024, 1048576), "encoding": map[string]any{"type": "string", "enum": []string{"utf8", "base64"}}}, "paths")},
+		{Name: "read", Description: "Read real OS paths as bounded text, base64 bytes, directory entries or metadata. Paths are resolved by the OS exactly as given: symlinks are followed and .. after a symlink names the parent of its target. Text line ranges scan at most 16 MiB; results report truncation. No approved-directory list.", ReadOnly: true, InputSchema: obj(map[string]any{"paths": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "minItems": 1, "maxItems": 16}, "cwd": str("Base for relative paths"), "start_line": integer("First text line, inclusive; default 1", 1, 10000000), "end_line": integer("Last text line, inclusive; zero means no line limit", 0, 10000000), "max_bytes": integer("Total returned content budget, default 65536; maximum 1 MiB", 1024, 1048576), "encoding": map[string]any{"type": "string", "enum": []string{"utf8", "base64"}}}, "paths")},
 		{Name: "write_file", Description: "Write UTF-8 text or base64-decoded bytes to a native file. Existing files require overwrite=true. Writes follow symlinks and OS permissions; failures report bytes actually written. Use apply_patch for contextual changes.", InputSchema: obj(map[string]any{"path": str("Native destination path"), "content": str("UTF-8 text or base64-encoded bytes, up to 1 MiB decoded"), "cwd": str("Base for relative paths"), "encoding": map[string]any{"type": "string", "enum": []string{"utf8", "base64"}}, "overwrite": boolean("Explicitly allow replacing the contents of an existing file"), "create_parents": boolean("Create missing parent directories"), "mode": str("Octal permissions for a new file, e.g. 0600; default 0644 before umask")}, "path", "content")},
-		{Name: "apply_patch", Description: "Apply a *** Begin Patch / *** End Patch textual patch with Add File, Update File, Delete File, optional Move to and @@ hunks. Context must match exactly and unambiguously. Validate all edits before writing; a filesystem failure during commit reports completed paths. Individual writes are atomic, the entire multi-file patch is not a filesystem transaction.", InputSchema: obj(map[string]any{"patch": str("Patch text, up to 1 MiB"), "cwd": str("Base for relative patch paths")}, "patch")},
+		{Name: "apply_patch", Description: "Apply a *** Begin Patch / *** End Patch textual patch with Add File, Update File, Delete File, optional Move to and @@ hunks. Context must match exactly and unambiguously after the previous hunk; an @@ anchor selects the first matching line. A hunk with only + lines appends at end of file, or directly after its @@ anchor. Update edits the existing file in place, keeping its owner, mode, hard links and attributes, and restores the original bytes if a write fails; Move to renames that same file. Unchanged lines keep their line endings. Delete File removes a file or symlink without reading it. All edits are validated before writing; a filesystem failure during commit reports completed paths. The multi-file patch is not a filesystem transaction.", InputSchema: obj(map[string]any{"patch": str("Patch text, up to 1 MiB"), "cwd": str("Base for relative patch paths")}, "patch")},
 		{Name: "view_image", Description: "Return a PNG/JPEG/GIF image as MCP image content. Maximum 2 MiB file and 40 million pixels; no resizing. Uses normal OS file permissions.", ReadOnly: true, InputSchema: obj(map[string]any{"path": str("Native image path"), "cwd": str("Base for relative paths")}, "path")},
 	}
 }

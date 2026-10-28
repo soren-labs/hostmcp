@@ -4,7 +4,7 @@ set -euo pipefail
 
 release_version="${1:-}"
 if [[ -z "$release_version" ]]; then
-  printf '%s\n' 'Usage: bash scripts/release.sh v0.2.0 [OUTPUT_DIRECTORY]' >&2
+  printf '%s\n' 'Usage: bash scripts/release.sh v0.2.1 [OUTPUT_DIRECTORY]' >&2
   exit 2
 fi
 release_version="${release_version#v}"
