@@ -30,6 +30,17 @@ init、device invite、agent enroll/run 组成，本页补充网络与常驻服�
 目录设置 0700，秘密文件设置 0600。不要把部署状态放进 Git checkout。通过
 hostmcp doctor 和 device_info 确认运行账户、主目录与实际环境。
 
+Hub 若以独立服务账户运行，本机 `hub configure`、`device invite/revoke` 和
+`token create/update/rotate/revoke` 等管理命令也应使用该账户。例如：
+
+```sh
+sudo -u hostmcp /usr/local/bin/hostmcp device invite \
+  --config /var/lib/hostmcp/hub.json --id workstation-worker --user worker \
+  --output /var/lib/hostmcp/workstation-worker-invite.json
+```
+
+这样配置、锁文件和生成的邀请始终由 Hub 账户持有，配置目录也能保持正确权限。
+
 ## Cloudflare named Tunnel：VPS 与家庭设备通用
 
 需要 Cloudflare 账户、用于发布应用的域名，以及能出站联网的 Hub 机器。域名
@@ -107,7 +118,7 @@ hostmcp service install --role agent \
 
 只安装这台机器需要的角色。Hub 不会自动成为可执行设备。
 仓库的 [systemd 示例](../deploy/systemd/)用于手工部署；它们是用户级 unit，
-不是 root 系统服务。
+用户服务使用它们；系统服务使用下方 `--system` 方式生成。
 
 ```sh
 systemctl --user status hostmcp-hub
@@ -142,6 +153,41 @@ LaunchAgent 与用户登录会话关联。不要将它描述成在 FileVault 尚
 macOS 文件访问仍受 TCC 等机制控制。Agent 运行于当前 UID 不能自动获得完整
 磁盘访问、屏幕录制或 Accessibility；首版也没有键鼠或屏幕捕获工具。需要的
 文件访问授权由用户通过系统设置授予对应进程，系统拒绝应原样返回。
+
+## Linux / macOS 系统服务与多账户
+
+v0.2.0 可由管理员安装 systemd system service 或 macOS LaunchDaemon。执行
+账户由 `--user` 显式指定，root 也使用相同机制。每个账户节点使用独立的服务名
+和配置文件，完整注册过程见[账户节点与权限配置](account-nodes.md)。
+
+```sh
+sudo /usr/local/bin/hostmcp service install --system --user worker \
+  --role agent --config /home/worker/.config/hostmcp/agent.json \
+  --name hostmcp-worker
+sudo /usr/local/bin/hostmcp service install --system --user root \
+  --role agent --config /var/lib/hostmcp/root.json --name hostmcp-root
+```
+
+macOS 将示例中的普通用户名称和主目录换成实际账户；系统服务不要使用仅该用户
+可改写的开发构建文件。普通用户服务继续使用原命令，不需要 `--system`。
+同一个节点只能选择一种服务方式，避免重复进程争用同一 device ID。
+
+系统服务配置必须由执行账户持有、权限为 `0600`，且该账户能够穿越父目录并
+读取文件；Hub 还要能写入配置目录以更新注册和凭证。root 服务的二进制、配置
+及其父目录必须由 root 持有，且不能由 group/other 写入。安装器会检查这些条件。
+服务安装拒绝覆盖已存在的 unit；升级时在原路径替换二进制，再重启已有服务。
+
+Linux 系统服务使用 `systemctl status NAME`、`journalctl -u NAME` 检查；macOS
+系统服务使用 `launchctl print system/com.hostmcp.NAME` 检查。系统服务的卸载
+也明确传入 `--system`，不会自动删除同名用户服务或配置文件：
+
+```sh
+sudo /usr/local/bin/hostmcp service uninstall --system --name hostmcp-root
+```
+
+macOS 系统服务日志位于 `/Library/Logs/HostMCP/NAME/service.log`，用户服务日志
+位于 `~/Library/Logs/HostMCP/NAME.log`。卸载可重复执行，保留配置和日志；它不
+代替在 Hub 上撤销设备凭证。
 
 ## 容器部署 Hub
 

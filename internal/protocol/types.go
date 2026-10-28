@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 const WireVersion = 1
 const MaxMessageBytes = 4 << 20
 
@@ -38,16 +38,18 @@ func JSONResult(value any) Result {
 }
 
 type Device struct {
-	ID          string    `json:"id"`
-	Hostname    string    `json:"hostname"`
-	OS          string    `json:"os"`
-	Arch        string    `json:"arch"`
-	Username    string    `json:"username"`
-	UID         string    `json:"uid"`
-	Home        string    `json:"home"`
-	Version     string    `json:"version"`
-	Online      bool      `json:"online"`
-	ConnectedAt time.Time `json:"connected_at,omitempty"`
+	ID           string    `json:"id"`
+	Hostname     string    `json:"hostname"`
+	OS           string    `json:"os"`
+	Arch         string    `json:"arch"`
+	Username     string    `json:"username"`
+	UID          string    `json:"uid"`
+	EUID         string    `json:"euid,omitempty"`
+	ExpectedUser string    `json:"expected_user,omitempty"`
+	Home         string    `json:"home"`
+	Version      string    `json:"version"`
+	Online       bool      `json:"online"`
+	ConnectedAt  time.Time `json:"connected_at,omitzero"`
 }
 
 type Message struct {

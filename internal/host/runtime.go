@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ const (
 )
 
 type Runtime struct {
+	deviceID string
 	mu       sync.Mutex
 	sessions map[string]*session
 	requests map[string]requestRecord
@@ -50,7 +52,14 @@ type requestRecord struct {
 	ExpiresAt              time.Time
 }
 
-func New() (*Runtime, error) {
+func New() (*Runtime, error) { return NewForDevice("local") }
+
+// NewForDevice records the registered node ID for device_info. It does not
+// change the process account or grant permissions; those come from the OS.
+func NewForDevice(deviceID string) (*Runtime, error) {
+	if deviceID == "" {
+		deviceID = "local"
+	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		return nil, errors.New("HostMCP supports Linux and macOS")
 	}
@@ -62,17 +71,29 @@ func New() (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("current OS account: %w", err)
 	}
+	// Process authority follows the effective UID. Most service launches have
+	// matching real/effective UIDs; handle the other case without advertising the
+	// unprivileged real account for a privileged executor.
+	if u.Uid != strconv.Itoa(os.Geteuid()) {
+		u, err = user.LookupId(strconv.Itoa(os.Geteuid()))
+		if err != nil {
+			return nil, fmt.Errorf("effective OS account: %w", err)
+		}
+	}
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
 	}
-	r := &Runtime{sessions: map[string]*session{}, requests: map[string]requestRecord{}, cwd: cwd, user: u, hostname: hostname, calls: make(chan struct{}, 32), stop: make(chan struct{})}
+	r := &Runtime{deviceID: deviceID, sessions: map[string]*session{}, requests: map[string]requestRecord{}, cwd: cwd, user: u, hostname: hostname, calls: make(chan struct{}, 32), stop: make(chan struct{})}
 	go r.reap()
 	return r, nil
 }
 
 func (r *Runtime) Info(deviceID string) protocol.Device {
-	return protocol.Device{ID: deviceID, Hostname: r.hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, Username: r.user.Username, UID: r.user.Uid, Home: r.user.HomeDir, Version: protocol.Version, Online: true}
+	if deviceID == "" {
+		deviceID = r.deviceID
+	}
+	return protocol.Device{ID: deviceID, Hostname: r.hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, Username: r.user.Username, UID: strconv.Itoa(os.Getuid()), EUID: strconv.Itoa(os.Geteuid()), Home: r.user.HomeDir, Version: protocol.Version, Online: true}
 }
 
 func (r *Runtime) Close() error {

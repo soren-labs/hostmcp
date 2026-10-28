@@ -31,7 +31,7 @@ import (
 	"github.com/soren-labs/hostmcp/internal/service"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 var commit = "development"
 var buildTime = "unknown"
 
@@ -41,17 +41,20 @@ const usage = `HostMCP — native Linux/macOS tools, locally or across your devi
   hostmcp hub init [--config FILE] [--listen HOST:PORT] [--public-url URL]
   hostmcp hub serve [--config FILE]
   hostmcp hub configure [--config FILE] [--public-url URL] [--listen HOST:PORT]
-  hostmcp device invite --id NAME --output INVITE.json [--config HUB.json]
+  hostmcp device invite --id NAME --output INVITE.json [--user OS_USER] [--config HUB.json]
   hostmcp device revoke --id NAME [--config HUB.json]
   hostmcp device list [--config HUB.json]
   hostmcp agent enroll --invite INVITE.json [--config AGENT.json]
   hostmcp agent run [--config AGENT.json]
   hostmcp token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
+  hostmcp token list [--config HUB.json]
+  hostmcp token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
+  hostmcp token rotate --id NAME --output NEW_TOKEN [--config HUB.json]
   hostmcp token revoke --id NAME [--config HUB.json]
   hostmcp connect --url https://host.example/mcp --token-file TOKEN
   hostmcp call --url URL --token-file TOKEN --tool list_devices --args '{}'
-  hostmcp service install --role hub|agent --config FILE [--name hostmcp-NAME]
-  hostmcp service uninstall --name hostmcp-NAME
+  hostmcp service install --role hub|agent --config FILE [--name hostmcp-NAME] [--system --user OS_USER]
+  hostmcp service uninstall --name hostmcp-NAME [--system]
   hostmcp doctor
   hostmcp version
 
@@ -280,6 +283,7 @@ func deviceCommand(args []string) error {
 	f := flags("device " + args[0])
 	path := f.String("config", defaultFile("hub.json"), "hub configuration path")
 	id := f.String("id", "", "device ID")
+	expectedUser := f.String("user", "", "bind this node to an expected OS username (optional)")
 	output := f.String("output", "", "private invitation JSON output file")
 	ttl := f.Duration("ttl", 15*time.Minute, "invitation lifetime (maximum 24h)")
 	if err := parse(f, args[1:]); err != nil {
@@ -291,7 +295,7 @@ func deviceCommand(args []string) error {
 		if err := absent(*output); err != nil {
 			return err
 		}
-		i, err := store.InviteDevice(*id, *ttl)
+		i, err := store.InviteDeviceForUser(*id, *expectedUser, *ttl)
 		if err != nil {
 			return err
 		}
@@ -350,7 +354,7 @@ func deviceCommand(args []string) error {
 
 func tokenCommand(args []string) error {
 	if len(args) == 0 {
-		return errors.New("use token create or token revoke")
+		return errors.New("use token create, list, update, rotate or revoke")
 	}
 	f := flags("token " + args[0])
 	path := f.String("config", defaultFile("hub.json"), "hub configuration path")
@@ -360,11 +364,68 @@ func tokenCommand(args []string) error {
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	if !config.ValidID(*id) {
+	if args[0] != "list" && !config.ValidID(*id) {
 		return errors.New("valid --id is required")
 	}
 	store := config.NewStore(*path)
 	switch args[0] {
+	case "list":
+		h, err := store.Snapshot()
+		if err != nil {
+			return err
+		}
+		type clientInfo struct {
+			ID      string   `json:"id"`
+			Devices []string `json:"devices"`
+		}
+		clients := make([]clientInfo, 0, len(h.Clients))
+		for _, c := range h.Clients {
+			clients = append(clients, clientInfo{ID: c.ID, Devices: c.Devices})
+		}
+		return printJSON(map[string]any{"clients": clients})
+	case "update":
+		scopes := commaList(*devices)
+		if len(scopes) == 0 {
+			return errors.New("--devices is required")
+		}
+		return store.Update(func(h *config.Hub) error {
+			for n := range h.Clients {
+				if h.Clients[n].ID == *id {
+					h.Clients[n].Devices = scopes
+					return nil
+				}
+			}
+			return errors.New("client not found")
+		})
+	case "rotate":
+		if *devices != "" {
+			return errors.New("token rotate preserves device access; use token update to change it")
+		}
+		if err := absent(*output); err != nil {
+			return err
+		}
+		token, err := config.NewToken()
+		if err != nil {
+			return err
+		}
+		if err = config.WriteSecret(*output, []byte(token+"\n"), false); err != nil {
+			return err
+		}
+		err = store.Update(func(h *config.Hub) error {
+			for n := range h.Clients {
+				if h.Clients[n].ID == *id {
+					h.Clients[n].TokenHash = config.Hash(token)
+					return nil
+				}
+			}
+			return errors.New("client not found")
+		})
+		if err != nil {
+			_ = os.Remove(*output)
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Rotated client %s; old credential is revoked; new private token file: %s\n", *id, *output)
+		return nil
 	case "create":
 		if err := absent(*output); err != nil {
 			return err
@@ -383,7 +444,7 @@ func tokenCommand(args []string) error {
 		err = store.Update(func(h *config.Hub) error {
 			for _, c := range h.Clients {
 				if c.ID == *id {
-					return errors.New("client already exists; revoke before rotating")
+					return errors.New("client already exists; use token rotate to replace its credential")
 				}
 			}
 			h.Clients = append(h.Clients, config.Client{ID: *id, TokenHash: config.Hash(token), Devices: scopes})
@@ -413,7 +474,7 @@ func tokenCommand(args []string) error {
 			return nil
 		})
 	default:
-		return errors.New("use token create or token revoke")
+		return errors.New("use token create, list, update, rotate or revoke")
 	}
 }
 
@@ -468,7 +529,7 @@ func agentCommand(ctx context.Context, args []string) error {
 		if err = json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&a); err != nil {
 			return err
 		}
-		if a.Version != 1 || a.DeviceID != i.DeviceID || a.HubURL != i.HubURL || len(a.Token) < 32 {
+		if a.Version != 1 || a.DeviceID != i.DeviceID || a.HubURL != i.HubURL || a.ExpectedUser != i.ExpectedUser || len(a.Token) < 32 {
 			return errors.New("hub returned inconsistent device credentials")
 		}
 		if err = config.WriteJSON(*path, a, false); err != nil {
@@ -487,7 +548,7 @@ func agentCommand(ctx context.Context, args []string) error {
 		if _, err := config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
 		}
-		rt, err := host.New()
+		rt, err := host.NewForDevice(a.DeviceID)
 		if err != nil {
 			return err
 		}
@@ -557,6 +618,8 @@ func serviceCommand(args []string) error {
 	role := f.String("role", "", "hub or agent")
 	path := f.String("config", "", "absolute configuration path")
 	name := f.String("name", "", "service name starting with hostmcp-")
+	system := f.Bool("system", false, "install or remove a system service (requires root)")
+	user := f.String("user", "", "OS account for a system service; requires --system")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
@@ -565,12 +628,12 @@ func serviceCommand(args []string) error {
 		if *path == "" {
 			return errors.New("--config is required")
 		}
-		return service.Install(*name, *role, *path)
+		return service.InstallWithOptions(*name, *role, *path, service.Options{System: *system, User: *user})
 	case "uninstall":
 		if *name == "" {
 			return errors.New("--name is required")
 		}
-		return service.Uninstall(*name)
+		return service.UninstallWithOptions(*name, service.Options{System: *system, User: *user})
 	default:
 		return errors.New("use service install or service uninstall")
 	}

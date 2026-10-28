@@ -21,7 +21,7 @@ type Options struct {
 
 func New(opts Options) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "hostmcp", Version: protocol.Version}, &mcp.ServerOptions{
-		Instructions: "HostMCP operates as the OS user running each device agent. Select an online device before remote tool calls. Long commands return a session ID; use write_stdin to collect output and terminate_process to stop them. A network failure does not roll back a command: query processes after reconnecting and do not blindly repeat side effects.",
+		Instructions: "Each HostMCP node is one machine plus the OS account running its agent. Different node IDs on the same machine can represent ordinary and root accounts. A credential grants the native authority of its allowed nodes; there are no directory or command allowlists. Select an online node and check its username and UID before remote tool calls. Long commands return a session ID; use write_stdin to collect output and terminate_process to stop them. A network failure does not roll back a command: query processes after reconnecting and do not blindly repeat side effects.",
 	})
 	principal := func(req *mcp.CallToolRequest) (string, error) {
 		if req.Extra != nil && req.Extra.TokenInfo != nil && req.Extra.TokenInfo.UserID != "" {
@@ -51,7 +51,7 @@ func New(opts Options) *mcp.Server {
 				properties = map[string]any{}
 				schema["properties"] = properties
 			}
-			properties["device"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "description": "Registered device ID from list_devices."}
+			properties["device"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "description": "Registered account-node ID from list_devices. Check username and UID; two nodes on the same machine may have different account privileges."}
 			required, _ := schema["required"].([]any)
 			schema["required"] = append(required, "device")
 		}

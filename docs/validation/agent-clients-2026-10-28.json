@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-28",
+  "hostmcp_version": "0.2.0",
+  "hub_environment": "Dedicated AWS EC2 t3.micro; HTTPS reverse proxy",
+  "scope": "Two Linux account nodes on the same workstation; separate node-scoped credentials",
+  "redaction": "Hostnames, endpoints, account paths, session identifiers, API request identifiers and credentials omitted",
+  "clients": [
+    {
+      "client": "codex",
+      "version": "0.162.1",
+      "node_role": "ordinary",
+      "transport": "stdio bridge to HTTPS MCP",
+      "successful_tool_results": 3,
+      "events": [
+        {
+          "tool": "list_devices",
+          "visible_node_count": 1,
+          "online": true,
+          "os": "linux",
+          "arch": "amd64"
+        },
+        {
+          "tool": "device_info",
+          "uid": 1001,
+          "euid": 1001,
+          "gid": 1001
+        },
+        {
+          "tool": "exec_command",
+          "command": "id -u",
+          "output": "1001\n",
+          "running_on_first_response": true
+        }
+      ],
+      "completion_followup": {
+        "tool": "write_stdin",
+        "actor": "verification subagent through HostMCP CLI using the same credential",
+        "running": false,
+        "exit_code": 0
+      },
+      "raw_event_sha256": "8b5beed4f5b6d4c310e74058696eb3b3d8ddaffb5f3351bd12753ebbb950397d",
+      "approval_mode": "--approve-for-me; normal automatic approval review; no bypass options"
+    },
+    {
+      "client": "claude",
+      "version": "2.1.292",
+      "node_role": "root",
+      "transport": "stdio bridge to HTTPS MCP",
+      "successful_tool_results": 3,
+      "events": [
+        {
+          "tool": "list_devices",
+          "visible_node_count": 1,
+          "online": true,
+          "os": "linux",
+          "arch": "amd64"
+        },
+        {
+          "tool": "device_info",
+          "uid": 0,
+          "euid": 0,
+          "gid": 0
+        },
+        {
+          "tool": "exec_command",
+          "command": "id -u",
+          "output": "0\n",
+          "running_on_first_response": true
+        }
+      ],
+      "completion_followup": {
+        "tool": "write_stdin",
+        "actor": "verification subagent through HostMCP CLI using the same credential",
+        "running": false,
+        "exit_code": 0
+      },
+      "raw_event_sha256": "8900ffb9fdd7c0f63772db9960d1850715cc4234847f4ebaa07f5f580edf630b",
+      "model": "claude-opus-5-5",
+      "mcp_connection": "connected",
+      "permission_denials": []
+    }
+  ],
+  "client_policy_check": {
+    "client": "codex",
+    "mode": "approval_policy=never",
+    "list_devices": "passed",
+    "device_info": "passed",
+    "exec_command": "denied by the client before dispatch",
+    "error": "MCP tool call requires approval, but approval policy is never"
+  },
+  "account_permission_check": {
+    "status": "passed",
+    "checks": [
+      "credential_scoped_inventory",
+      "native_execution_uids",
+      "cross_node_execution_denied",
+      "native_file_and_shell_permissions"
+    ],
+    "root_node": "same-host-root",
+    "ordinary_node": "same-host-worker",
+    "transport": "MCP HTTP",
+    "root_uid": "0",
+    "root_euid": "0",
+    "ordinary_uid": "1001",
+    "ordinary_euid": "1001",
+    "cleanup": "exclusive root-owned fixture removed",
+    "seconds": 28.632,
+    "same_host_validated": true,
+    "raw_result_sha256": "2ce546173d8e2d7fbbb98d6e605d58583b410e517949d20d8ccdc3708f56a42e"
+  }
+}

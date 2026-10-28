@@ -1,0 +1,24 @@
+{
+  "hub_resources": {
+    "available": true,
+    "cpu_percent_one_core": 54.633849206572165,
+    "cpu_seconds": 1.63,
+    "rss_peak_kib": 32440,
+    "samples": 31
+  },
+  "kind": "simulated_account_nodes",
+  "nodes": 200,
+  "post_reconnect_routes": 20,
+  "real_hosts": false,
+  "reconnected_nodes": 20,
+  "route_concurrency": 8,
+  "seconds": 3.012056277,
+  "successful_routes": 200,
+  "environment": {
+    "provider": "AWS EC2",
+    "instance_type": "t3.micro",
+    "memory_gib": 1,
+    "os": "Linux amd64",
+    "measurement_scope": "isolated Hub process; simulator excluded"
+  }
+}

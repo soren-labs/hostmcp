@@ -4,8 +4,8 @@ set -eu
 
 usage() {
   cat <<'EOF'
-Usage: sh install.sh --version v0.1.0 [--prefix DIR] [--repository OWNER/REPO]
-       sh install.sh --version v0.1.0 --archive PATH --checksums PATH [--prefix DIR]
+Usage: sh install.sh --version v0.2.0 [--prefix DIR] [--repository OWNER/REPO]
+       sh install.sh --version v0.2.0 --archive PATH --checksums PATH [--prefix DIR]
 
 Downloads the requested GitHub release, verifies SHA-256, and installs hostmcp.
 Default destination: $HOME/.local/bin. No privilege escalation or service changes.
