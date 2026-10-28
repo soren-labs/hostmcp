@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.2.0 — 2026-10-28
+
+Account-node deployment for Linux and macOS. One registered node represents one
+machine plus its actual OS account; clients receive separate credentials scoped to
+node IDs. Root and ordinary accounts on the same host run separate named agents.
+No directory policy, command allowlist, Windows support, or extra role hierarchy
+is introduced.
+
+### Added
+
+- Optional expected-account binding on device invitations to catch accidental
+  deployment under a different OS user.
+- Client credential inventory, node-scope updates, and atomic credential rotation
+  without changing the client's stable identity.
+- Named Linux/macOS system services alongside existing user services, including
+  explicit ordinary-user and root execution identities.
+- Developer recipes for Codex and Claude Code, independent client credentials,
+  and same-host root/ordinary account nodes.
+- `scripts/verify-access.py` for actual MCP credential scopes, execution UID,
+  root-only file permissions, and fixture cleanup.
+
+### Fixed
+
+- Stdio clients receive the remote Hub's account and execution-lifecycle
+  instructions through the bridge. Both 2025-11-25 and 2026-07-28 protocol paths
+  have bridge tests for catalog, argument, result and error forwarding.
+
+Deployment measurements and real agent-client evidence are recorded in
+[docs/validation.md](docs/validation.md). Process sessions survive a connection
+interruption while the node process remains alive; node-process restart recovery
+and durable exactly-once command execution are not part of this release.
+
 ## v0.1.0 — 2026-10-22
 
 First usable native HostMCP runtime, replacing the source-only extraction baseline

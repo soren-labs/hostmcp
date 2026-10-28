@@ -101,6 +101,81 @@ hostmcp token create --config /absolute/path/hub.json \
 为不同客户端使用不同 ID 和 token。这样可以独立撤销某个客户端，并避免把
 一个 client principal 的托管终端同时交给多个不需要共享会话的客户端。
 
+这里的设备 ID 是**账户节点 ID**。例如 `workstation-worker` 与
+`workstation-root` 可在同一机器上分别以 worker 和 root 运行；授权到前者不会
+自动获得后者。完整部署步骤见[账户节点](account-nodes.md)。
+
+## Codex CLI
+
+已登录的 Codex 可以把远端 Hub 配成 stdio bridge。下列命令保存一个客户端
+配置；使用 Codex 专属 token，替换实际路径与 URL：
+
+```sh
+codex mcp add hostmcp -- /absolute/path/hostmcp connect \
+  --url https://mcp.example.com/mcp \
+  --token-file /absolute/path/codex-worker.token
+```
+
+对应的 `config.toml` 配置为：
+
+```toml
+[mcp_servers.hostmcp]
+command = "/absolute/path/hostmcp"
+args = ["connect", "--url", "https://mcp.example.com/mcp", "--token-file", "/absolute/path/codex-worker.token"]
+```
+
+也可以直接使用 HTTP，当前 Codex CLI 的参数如下：
+
+```sh
+codex mcp add hostmcp-http --url https://mcp.example.com/mcp \
+  --bearer-token-env-var HOSTMCP_TOKEN
+```
+
+此方式要求启动 Codex 的环境提供 `HOSTMCP_TOKEN`。文件式 bridge 便于管理独立
+凭证且无需在配置中写入 token 正文。使用 `codex mcp list` 或 `codex mcp get
+hostmcp` 核对注册，不要同时给同一任务配置不需要的高权限凭证。
+
+初次对话可以要求：先调用 `list_devices`，选择指定节点，调用 `device_info`
+并执行 `id -u`。Codex 本地 sandbox 约束本地执行；远端 MCP 的权限由 Hub
+凭证范围和目标节点的 OS 账户决定，两者分别管理。
+
+### Codex 单次隔离验收
+
+Codex CLI 0.162.1 可用单次配置覆盖，不修改已有全局 MCP 配置。先核对当前版本
+`codex exec --help`，然后在专用测试目录执行：
+
+```sh
+codex exec --ignore-user-config --ephemeral --skip-git-repo-check \
+  --sandbox read-only --json \
+  -c 'mcp_servers.hostmcp.command="/absolute/path/hostmcp"' \
+  -c 'mcp_servers.hostmcp.args=["connect","--url","https://mcp.example.com/mcp","--token-file","/absolute/path/codex-worker.token"]' \
+  '只使用 hostmcp MCP：先列出节点，再对 workstation-worker 查询身份并执行 id -u。不要使用本地 Shell 或其他工具；根据真实工具结果报告，不修改文件。'
+```
+
+检查 JSONL 中真实的 MCP tool call、对应结果和执行 UID。模型总结不能替代工具
+事件证据；登录、额度或客户端策略阻止调用时，记录为未完成，不改变限制绕过。
+
+## Claude Code
+
+Claude Code 同样推荐独立 token 和 stdio bridge：
+
+```sh
+claude mcp add --transport stdio --scope local hostmcp \
+  -- /absolute/path/hostmcp connect \
+  --url https://mcp.example.com/mcp \
+  --token-file /absolute/path/claude-admin.token
+```
+
+`--scope local` 将服务器配置关联到当前项目的本地设置。也可以把本文前面的
+`mcpServers` JSON 保存成独立文件，使用 `--strict-mcp-config --mcp-config FILE`
+单次加载。为 root 节点发放的 token 和普通节点 token 使用不同文件，按当前
+任务选择其中一套配置。
+
+下方保留只读发现验收示例。需要验证实际执行账户时，把
+`mcp__hostmcp__exec_command` 加入 `--allowedTools` 并从 `--disallowedTools`
+删除，提示词明确只在指定节点执行 `id -u`。客户端审批规则仍然有效；HostMCP
+不接管客户端审批。
+
 ## 兼容性记录
 
 | 接入 | 当前声明 |

@@ -140,15 +140,29 @@ func Connect(ctx context.Context, raw, token, protocolVersion string, allowInsec
 // Bridge exposes the remote Hub tools to any stdio-capable MCP client. It never
 // executes a remote tool locally and never retries a failed side-effecting call.
 func Bridge(ctx context.Context, session *mcp.ClientSession) error {
-	s := mcp.NewServer(&mcp.Implementation{Name: "hostmcp-connect", Version: protocol.Version}, nil)
+	s, err := bridgeServer(ctx, session)
+	if err != nil {
+		return err
+	}
+	return s.Run(ctx, &mcp.StdioTransport{MaxLineLength: protocol.MaxMessageBytes})
+}
+
+func bridgeServer(ctx context.Context, session *mcp.ClientSession) (*mcp.Server, error) {
+	// Stdio clients need the same account and process-lifecycle instructions as
+	// direct HTTP clients. Keep them with the catalog forwarded by this bridge.
+	options := &mcp.ServerOptions{}
+	if initialized := session.InitializeResult(); initialized != nil {
+		options.Instructions = initialized.Instructions
+	}
+	s := mcp.NewServer(&mcp.Implementation{Name: "hostmcp-connect", Version: protocol.Version}, options)
 	count := 0
 	for tool, err := range session.Tools(ctx, nil) {
 		if err != nil {
-			return fmt.Errorf("list remote tools: %w", err)
+			return nil, fmt.Errorf("list remote tools: %w", err)
 		}
 		count++
 		if count > 256 {
-			return errors.New("remote tool catalog exceeds limit")
+			return nil, errors.New("remote tool catalog exceeds limit")
 		}
 		copyTool := *tool
 		s.AddTool(&copyTool, func(callctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -161,5 +175,5 @@ func Bridge(ctx context.Context, session *mcp.ClientSession) error {
 			return out, nil
 		})
 	}
-	return s.Run(ctx, &mcp.StdioTransport{MaxLineLength: protocol.MaxMessageBytes})
+	return s, nil
 }

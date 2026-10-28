@@ -7,6 +7,16 @@ Hub。拥有相应客户端 token 的调用方，可以对获准设备执行该�
 这包含调用其现有工具、读取其可读文件、修改其可写文件，以及使用已有 SSH
 配置等。客户端自己的审批策略仍然生效。
 
+授权的最小单位是**机器上的一个系统账户节点**。相同机器的普通用户节点与
+root 节点分别注册、分别运行、使用不同设备凭证；客户端 token 按节点 ID 授权。
+邀请的 `--user` 绑定预期执行账户，防止配置被无意用于另一个账户。项目不在
+账户权限之下再加目录白名单、命令过滤或工具级角色。
+
+账户本身已有的 `sudo`、Docker socket、管理员组等能力也属于它的原生权限。
+如需要一个实际无管理员权限的节点，请使用系统上本来就没有这些权限的专用账户。
+把已有管理员账户称为“普通节点”并不会收回它已有的能力。root 节点的权限范围
+由系统本身决定，不能用同机另一个普通节点保护该机器上的秘密免受 root 访问。
+
 同一个 Hub 应属于一个信任域。首版不提供面向陌生租户的 SaaS 隔离。具有命令
 执行权的客户端能访问目标用户自己的配置；按主体隔离托管 session 是防止串线
 的协议约束，不应宣传成同一 OS 用户内部的强隔离沙盒。
@@ -28,14 +38,20 @@ session ID 都不是授权依据。配置与 token 文件使用 0600，所在目
 ## 撤销与轮换
 
 ```sh
+hostmcp token list --config /absolute/path/hub.json
+hostmcp token update --config /absolute/path/hub.json \
+  --id client --devices workstation-worker,mac-developer
+hostmcp token rotate --config /absolute/path/hub.json \
+  --id client --output /absolute/path/client-new.token
 hostmcp device revoke --config /absolute/path/hub.json --id ubuntu
 hostmcp token revoke --config /absolute/path/hub.json --id client
-hostmcp token create --config /absolute/path/hub.json \
-  --id replacement --devices '*' --output /absolute/path/replacement.token
 ```
 
 只需访问部分设备的客户端，应把 --devices 设置为所需 ID 列表，避免通配符。
-新的 token 分发完成后撤销旧 token。设备撤销、活跃连接处理和配置重新加载的
+`token list` 只列出身份与节点范围，不输出 token 或 hash；`update` 保持现有
+凭证并更新节点范围；`rotate` 保持客户端身份与范围，原子生成替代凭证，旧凭证
+随即失效。轮换后将新文件安全分发到客户端。需要重叠迁移窗口时，先为独立 ID
+创建新 token，客户端切换后再撤销旧 ID。设备撤销、活跃连接处理和配置重新加载的
 具体测试结果见 validation.md。撤销授权不代表已完成的文件操作回滚，也不代表
 外部程序已产生的效果被撤销。
 
