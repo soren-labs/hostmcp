@@ -1,0 +1,96 @@
+{
+  "date_utc": "2026-10-28",
+  "version": "0.2.0",
+  "native_environments": [
+    "darwin-arm64",
+    "linux-amd64"
+  ],
+  "permanent_real_machines": 5,
+  "permanent_account_nodes": 6,
+  "linux_services": {
+    "status": "passed",
+    "actual_worker_uid": 1001,
+    "actual_root_uid": 0,
+    "same_host": true,
+    "checks": {
+      "user_cross_node_denied": true,
+      "root_cross_node_denied": true,
+      "root_reads_private_file": true,
+      "ordinary_user_os_permission_denied": true,
+      "ordinary_user_has_no_sudo": true,
+      "uninstall_idempotent": true
+    },
+    "temporary_services_cleaned": true
+  },
+  "macos_services": {
+    "status": "passed",
+    "transport": "loopback-only temporary Hub",
+    "service_kind": "LaunchDaemon",
+    "actual_root_uid": 0,
+    "checks": {
+      "root_read_private_fixture": true,
+      "ordinary_account_cannot_read_fixture": true,
+      "uninstall_idempotent_and_daemons_absent": true,
+      "temporary_credentials_fixtures_and_logs_removed": true
+    },
+    "public_mac_root_node_created": false
+  },
+  "independent_subagent": {
+    "transport": "MCP Streamable HTTP over verified HTTPS",
+    "credential_scope": "one EC2 ordinary-account node",
+    "actual_uid": 995,
+    "command_exit_code": 0,
+    "file_roundtrip": {
+      "written_bytes": 62,
+      "read_matches": true,
+      "temporary_fixture": true
+    },
+    "root_node_denied": true,
+    "root_node_dispatched": false,
+    "native_passwordless_sudo_denied": true,
+    "fixture_removed": true
+  },
+  "modal": {
+    "status": "passed",
+    "real_temporary_containers": 3,
+    "actual_uids": [
+      1000,
+      1000,
+      1000
+    ],
+    "transport": "verified HTTPS to deployment Hub",
+    "checks": [
+      "device_identity",
+      "native_command",
+      "file_write_and_read"
+    ],
+    "all_containers_stopped": true,
+    "test_nodes_and_client_revoked": true,
+    "temporary_invitation_and_client_token_files_removed": true
+  },
+  "credential_lifecycle": {
+    "status": "passed",
+    "transport": "HTTPS MCP",
+    "checks": [
+      "create_scoped_credential",
+      "update_scope_without_reissuing_credential",
+      "rotate_preserves_scope_and_rejects_old_token",
+      "revoke_rejects_new_token"
+    ],
+    "rotated_old_token_http_status": 401,
+    "revoked_new_token_http_status": 401,
+    "temporary_credential_files_removed": true
+  },
+  "evidence_sha256": {
+    "linux_services": "4b0c050c7bb4f9396f69051d12c30dda243324d5b2c7b2ae9b6023f3dfc5072d",
+    "macos_services": "32fe47968404e975b9c04d5ce4c083828e98b067abf0575b0c62bea0bee0a432",
+    "subagent": "57801534571372cb0d33d59f709e1bf1abde5b91c6374fa9bbf08fac87012c35",
+    "modal": "377466541e9cd2e2b5d80a73485e542bc6067569a187a10b4fbf0a507c9180b4"
+  },
+  "redaction": "Private infrastructure addresses, usernames, session IDs, token contents and container IDs are omitted. Raw local evidence is not committed.",
+  "limitations": [
+    "Scale evidence is a separate simulated-node experiment.",
+    "System service evidence used candidate binaries, with final release deployment verification tracked separately.",
+    "Native hardware validation covers darwin-arm64 and linux-amd64."
+  ]
+}

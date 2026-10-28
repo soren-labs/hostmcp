@@ -15,7 +15,8 @@ IP 时，可用 Cloudflare Tunnel 发布 Hub。
 当前版本是 **v0.2.0**：支持 Linux 与 macOS 的多设备、系统账户级 MCP 执行服务。
 [Releases](https://github.com/soren-labs/hostmcp/releases) 提供 Linux/macOS 的
 amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/validation.md)
-记录真实三机测试、第三方客户端接入、CI 与仍未验证的部署方式。
+记录五台真实机器上的六个常驻账户节点、临时 Modal 节点、真实 Agent 客户端、
+低配 EC2 部署及 200 个模拟节点的验证范围。
 
 项目针对个人或单个信任域的自部署实例：静态 bearer 认证、Linux/macOS 原生
 Agent、本地 stdio 和远程 Streamable HTTP。OAuth、多租户 SaaS、桌面键鼠控制、

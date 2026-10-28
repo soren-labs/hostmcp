@@ -8,7 +8,7 @@ on:
       version:
         description: 'Archive version (manual branch runs build artifacts only)'
         required: true
-        default: v0.1.0
+        default: v0.2.0
 
 permissions:
   contents: read
