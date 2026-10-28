@@ -27,6 +27,7 @@ const FormatVersion = 1
 const maxConfigBytes = 1 << 20
 
 type Hub struct {
+	OAuth          *OAuth       `json:"oauth,omitempty"`
 	Version        int          `json:"version"`
 	Listen         string       `json:"listen"`
 	PublicURL      string       `json:"public_url"`
@@ -291,6 +292,9 @@ func validate(h Hub) error {
 		return fmt.Errorf("invalid listen address: %w", err)
 	}
 	if _, err := CheckURL(h.PublicURL, true); err != nil {
+		return err
+	}
+	if err := h.OAuth.Validate(h.PublicURL); err != nil {
 		return err
 	}
 	ids := make(map[string]bool)

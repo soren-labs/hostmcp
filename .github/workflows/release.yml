@@ -8,7 +8,7 @@ on:
       version:
         description: 'Archive version (manual branch runs build artifacts only)'
         required: true
-        default: v0.2.1
+        default: v0.2.2
 
 permissions:
   contents: read
@@ -52,24 +52,8 @@ jobs:
           cache: true
       - name: Build release archives and checksums
         run: bash scripts/release.sh "$RELEASE_VERSION"
-      - name: Verify archive installation
-        run: |
-          release_version="${RELEASE_VERSION#v}"
-          sh scripts/install.sh --version "$RELEASE_VERSION" \
-            --archive "dist/hostmcp_${release_version}_linux_amd64.tar.gz" \
-            --checksums dist/SHA256SUMS --prefix "$RUNNER_TEMP/hostmcp-bin"
-          "$RUNNER_TEMP/hostmcp-bin/hostmcp" version
-      - name: Reject a corrupted archive
-        run: |
-          release_version="${RELEASE_VERSION#v}"
-          cp "dist/hostmcp_${release_version}_linux_amd64.tar.gz" "$RUNNER_TEMP/tampered.tar.gz"
-          printf 'tampered' >> "$RUNNER_TEMP/tampered.tar.gz"
-          if sh scripts/install.sh --version "$RELEASE_VERSION" \
-            --archive "$RUNNER_TEMP/tampered.tar.gz" --checksums dist/SHA256SUMS \
-            --prefix "$RUNNER_TEMP/hostmcp-rejected"; then
-            exit 1
-          fi
-          test ! -e "$RUNNER_TEMP/hostmcp-rejected/hostmcp"
+      - name: Verify component packaging and offline updater
+        run: python3 scripts/packaging-smoke.py --dist dist --version "$RELEASE_VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: release-archives

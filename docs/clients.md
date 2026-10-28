@@ -58,8 +58,10 @@ Shell 包装。调试日志应走 stderr。此模式仍要求客户端运行 bri
 
 使用客户端的 secret/env 引用功能保存 token；具体语法以该客户端版本的文档为准。
 不要将 token 放在 URL query，也不要改成设备邀请 token。若客户端只支持 OAuth
-登录而不能设置 bearer，则首版不能直接适配其远程登录流程；有本地 stdio 能力
-时可使用上面的 bridge。
+登录而不能设置 bearer，可配置新源码的 [外部 OAuth 资源服务器](oauth.md)。
+需要客户端与所选 provider 的发现、注册、PKCE 和 resource indicator 能力相符；
+本次未验收 Codex/Claude/ChatGPT 的实际 OAuth 登录。保留 bearer 与本地 stdio
+bridge 作为兼容路径；bridge 不实现 OAuth 登录或自动刷新 token。
 
 ## 通过内置 CLI 验证
 
@@ -181,6 +183,12 @@ claude mcp add --transport stdio --scope local hostmcp \
 删除，提示词明确只在指定节点执行 `id -u`。客户端审批规则仍然有效；HostMCP
 不接管客户端审批。
 
+## OAuth 配置
+
+完整配置、issuer 要求、subject 到节点的显式授权、隔离测试与回退步骤见
+[OAuth 文档](oauth.md)。`hostmcp connect` 和 `call` 继续读取预置 token 文件，
+不执行浏览器登录。stdio 不使用 OAuth HTTP 流程。
+
 ## 兼容性记录
 
 | 接入 | 当前声明 |
@@ -192,7 +200,7 @@ claude mcp add --transport stdio --scope local hostmcp \
 | Codex CLI 0.162.1 | 2026-10-28 实测：独立 worker 节点 token，三次真实工具调用成功；正常自动审批后 `id -u` 输出 1001 |
 | Claude Desktop | 可按 stdio 能力配置；尚未完成该宿主验收 |
 | ChatGPT 云端自定义 MCP 接入 | 未验证；不能假定支持任意静态 bearer header |
-| OAuth-only 客户端 | 首版没有完整 OAuth 服务，不能据此声称可直连 |
+| OAuth-capable 客户端 | 新源码提供外部 issuer/JWKS 与资源元数据；所选 provider、客户端和账户策略须实测，不能承诺直连 |
 
 最新 MCP 规范与旧版本存在握手、session 和流处理差异。项目使用官方 SDK，
 实际协商版本应作为验收证据记录，不把“有 /mcp endpoint”当作所有协议版本兼容。

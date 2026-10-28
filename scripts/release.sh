@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build four portable release archives and SHA256SUMS. Does not push tags or publish.
+# Build compatibility, Hub and Agent archives for four targets and SHA256SUMS. Does not push tags or publish.
 set -euo pipefail
 
 release_version="${1:-}"
@@ -71,18 +71,22 @@ cp -R reference/chat-on-steroids/docs/licenses/codex "$temp_dir/licenses/upstrea
 for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
   target_os="${target%/*}"
   target_arch="${target#*/}"
-  package_dir="$temp_dir/${target_os}_${target_arch}"
-  mkdir -p "$package_dir"
-  CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath \
-    -ldflags "-s -w -X main.version=$release_version -X main.commit=$release_commit -X main.buildTime=$release_time" \
-    -o "$package_dir/hostmcp" ./cmd/hostmcp
-  cp LICENSE NOTICE "$package_dir/"
-  cp README.md "$package_dir/"
-  cp -R docs "$package_dir/docs"
-  cp deploy/README.md "$package_dir/docs/native-services.md"
-  cp -R "$temp_dir/licenses" "$package_dir/licenses"
-  COPYFILE_DISABLE=1 tar -C "$package_dir" -czf "$output_dir/hostmcp_${release_version}_${target_os}_${target_arch}.tar.gz" \
-    hostmcp LICENSE NOTICE README.md docs licenses
+  for role in all hub agent; do
+    executable=hostmcp
+    if [[ "$role" != all ]]; then executable="hostmcp-$role"; fi
+    package_dir="$temp_dir/${executable}_${target_os}_${target_arch}"
+    mkdir -p "$package_dir"
+    CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath \
+      -ldflags "-s -w -X main.version=$release_version -X github.com/soren-labs/hostmcp/internal/protocol.Version=$release_version -X main.component=$role -X main.commit=$release_commit -X main.buildTime=$release_time" \
+      -o "$package_dir/$executable" ./cmd/hostmcp
+    cp LICENSE NOTICE "$package_dir/"
+    cp README.md "$package_dir/"
+    cp -R docs "$package_dir/docs"
+    cp deploy/README.md "$package_dir/docs/native-services.md"
+    cp -R "$temp_dir/licenses" "$package_dir/licenses"
+    COPYFILE_DISABLE=1 tar -C "$package_dir" -czf "$output_dir/${executable}_${release_version}_${target_os}_${target_arch}.tar.gz" \
+      "$executable" LICENSE NOTICE README.md docs licenses
+  done
 done
 
 python3 - "$output_dir" "$release_version" <<'PY'
@@ -92,7 +96,7 @@ import sys
 
 folder = pathlib.Path(sys.argv[1])
 version = sys.argv[2]
-names = [f"hostmcp_{version}_{os}_{arch}.tar.gz" for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
+names = [f"{component}_{version}_{os}_{arch}.tar.gz" for component in ("hostmcp", "hostmcp-hub", "hostmcp-agent") for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
 lines = []
 for name in names:
     digest = hashlib.sha256()

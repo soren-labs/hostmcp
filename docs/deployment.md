@@ -216,11 +216,27 @@ docker compose -f deploy/compose.yml down
 不要加 --volumes，除非明确决定删除配置、邀请和凭证。容器示例是否实际构建与
 验证以 validation.md 为准，提供模板不等同于已经通过 Docker 实机验收。
 
+## 独立组件、OAuth 与可选更新
+
+新源码的 `hostmcp-hub` 与 `hostmcp-agent` 有独立产物和安装路径；兼容二进制
+`hostmcp` 保留。Hub 认证、元数据和路由升级保持 wire v1 时，无需重新部署每个
+Agent。新原生工具或执行器修复仍需要 Agent 更新。版本合同、健康字段、批次
+升级、离线归档校验、回滚与 systemd/launchd 重启命令见
+[组件兼容与更新](components-updates.md)。该文档区分已运行版本与磁盘上的新文件。
+
+远程 OAuth 通过外部 provider 配置，详细步骤见 [OAuth](oauth.md)。只重启 Hub；
+Agent 不接受 OAuth 客户端凭证，也无需重新注册。反向代理必须公开受保护资源
+元数据路径并透传 `/mcp` 的 challenge 与 Authorization header。
+
+可选 Agent 更新通过每节点本地策略启用，固定 stable 版本和平台归档 SHA-256，
+不接受 Hub URL 下发、不默认更新 root、不提升权限或自动重启。可由用户 timer
+定时调用，再在维护窗口重启并检查在线版本；没有物理开机或故障硬件修复功能。
+
 ## 升级、撤销与卸载
 
 先备份受保护的配置，再安装目标版本二进制，重启该角色服务并执行 list_devices
-和 device_info 验证。初版不承诺跨任意未来版本的状态迁移；按 release notes
-升级。活动终端可能受到 Agent 重启影响，应先结束或另行管理重要任务。
+和 device_info 验证。按[兼容合同](components-updates.md)与 release notes 升级，不假定任意
+未来 wire/config 版本都兼容。活动终端可能受到 Agent 重启影响，应先结束或另行管理重要任务。
 
 撤销设备和 token 的命令见 [security.md](security.md)。卸载用户服务：
 

@@ -75,9 +75,17 @@ Access 的域名策略会阻断这些组件；外部客户端能附加 headers �
 Agent 连接与设备加入。只有整条链路的服务凭证传递已经另外实现并验证后，
 才可添加 Access 这一层；邮箱登录页不适用于这些自动化连接。
 
-首版使用静态 bearer，不实现完整 OAuth 2.1 discovery、authorization code、
-PKCE、刷新 token 或多用户登录。不要把其认证配置当作所有 SaaS MCP 宿主必然
-支持的方案。
+已发布 v0.2.1 使用静态 bearer；新源码可选 [外部 OAuth 资源服务器](oauth.md)：
+提供 RFC 9728 元数据与 challenge，验证外部 issuer 的 RS256/ES256 JWT、audience、
+expiry 和 scope。授权服务器负责注册、PKCE、登录和刷新；HostMCP 不自建身份服务。
+OAuth subject 与客户端 ID 的会话身份独立于 legacy owner；scope 不能授予节点，
+每个 subject 必须显式列出节点且不能使用 `*`。现有 bearer 和 agent 凭证保留。
+不能把这些能力等同于所有 SaaS MCP 宿主实测兼容。
+
+[Agent 更新器](components-updates.md)仅接受本机私有 opt-in 策略、固定官方 HTTPS
+源、准确 stable 版本与独立配置的 SHA-256。Hub 不下发下载地址；验证失败保留原
+二进制，成功原子替换并保留一份本地回滚副本。拒绝 root，不自动重启服务，不
+声称有签名发行证明或重启后的自动回滚。它只更新 agent 角色，不改变 OS 权限。
 
 ## 完整用户权限的边界
 

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,10 +27,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/soren-labs/hostmcp/internal/config"
 	"github.com/soren-labs/hostmcp/internal/mcpserver"
+	"github.com/soren-labs/hostmcp/internal/oauth"
 	"github.com/soren-labs/hostmcp/internal/protocol"
 )
 
 type Hub struct {
+	oauth           *oauth.Verifier
+	oauthScopes     []string
+	metadataURL     string
 	store           *config.Store
 	handler         http.Handler
 	ctx             context.Context
@@ -66,11 +71,23 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 	if store == nil {
 		return nil, errors.New("configuration store is required")
 	}
-	if _, err := store.Snapshot(); err != nil {
+	cfg, err := store.Snapshot()
+	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit)}
+	if cfg.OAuth != nil {
+		discoveryCtx, stop := context.WithTimeout(ctx, 20*time.Second)
+		h.oauth, err = oauth.New(discoveryCtx, cfg.OAuth.Issuer, strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp")
+		stop()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		h.oauthScopes = append([]string(nil), cfg.OAuth.Scopes...)
+		h.metadataURL = strings.TrimSuffix(cfg.PublicURL, "/") + "/.well-known/oauth-protected-resource/mcp"
+	}
 	server := mcpserver.New(mcpserver.Options{Tools: tools, Remote: true, Call: h.Call, ListDevices: h.ListDevices})
 	streamable := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: protocol.MaxMessageBytes,
@@ -78,23 +95,13 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		// localhost cloudflared/Caddy upstream can carry the real public Host.
 		DisableLocalhostProtection: true, PropagateRequestCancellation: true,
 	})
-	authHandler := auth.RequireBearerToken(func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-		client, ok := store.AuthClient(token)
-		if !ok {
-			return nil, auth.ErrInvalidToken
-		}
-		return &auth.TokenInfo{UserID: clientPrincipal(client)}, nil
-	}, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true})(streamable)
+	authHandler := auth.RequireBearerToken(cachedTokenInfo, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true, ResourceMetadataURL: h.metadataURL})(streamable)
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("WWW-Authenticate", "Bearer realm=\"hostmcp\"")
-		if bearer(r) == "" {
-			h.auditDenied("mcp", "missing_bearer")
-			http.Error(w, "one bearer credential is required", http.StatusUnauthorized)
-			return
-		}
-		h.boundedClient(authHandler).ServeHTTP(w, r)
-	}))
+	mux.Handle("/mcp", h.boundedClient(authHandler))
+	if h.oauth != nil {
+		mux.HandleFunc("/.well-known/oauth-protected-resource", h.metadata)
+		mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", h.metadata)
+	}
 	mux.HandleFunc("/agent/", h.acceptAgent)
 	mux.Handle("/enroll", h.bounded(h.enrollments, http.HandlerFunc(h.enroll)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +111,7 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "version": protocol.Version})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "version": protocol.Version, "component": "hub", "wire_version": protocol.WireVersion})
 	})
 	h.handler = h.protect(mux)
 	go h.recheckDevices()
@@ -167,13 +174,19 @@ func (h *Hub) auditDenied(endpoint, reason string) {
 
 func (h *Hub) boundedClient(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := bearer(r)
-		if _, ok := h.store.AuthClient(token); !ok {
-			h.auditDenied("mcp", "invalid_bearer")
-			http.Error(w, "invalid bearer credential", http.StatusUnauthorized)
+		if r.URL.Query().Has("access_token") {
+			http.Error(w, "tokens must use Authorization header", 400)
 			return
 		}
-		key := config.Hash(token)
+		info, code := h.authenticate(r)
+		if code != 0 {
+			h.challenge(w, code)
+			h.auditDenied("mcp", "credential_rejected")
+			http.Error(w, http.StatusText(code), code)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), tokenInfoKey{}, info))
+		key := info.UserID
 		h.limitsMu.Lock()
 		limit := h.clientSlots[key]
 		if limit == nil {
@@ -383,7 +396,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid handshake")
 		return
 	}
-	if !validInfo(*hello.Device) {
+	if !validInfo(*hello.Device) || (hello.Device.Component != "" && hello.Device.Component != "agent") || (hello.Device.WireVersion != 0 && hello.Device.WireVersion != hello.Version) {
 		log.Printf("event=device_rejected device=%q reason=invalid_info", id)
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid device info")
 		return
@@ -397,6 +410,10 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	info.ID = id
 	info.Online = true
 	info.ConnectedAt = time.Now().UTC()
+	info.LastSeen = info.ConnectedAt
+	info.DisconnectedAt = time.Time{}
+	info.WireVersion = hello.Version
+	info.Component = "agent"
 	d := &deviceConn{id: id, hash: config.Hash(token), info: info, conn: conn, done: make(chan struct{}), pending: map[string]chan protocol.Message{}}
 	h.mu.Lock()
 	old := h.connections[id]
@@ -416,13 +433,14 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 			delete(h.connections, id)
 			if info, ok := h.known[id]; ok {
 				info.Online = false
+				info.DisconnectedAt = time.Now().UTC()
 				h.known[id] = info
 			}
 		}
 		h.mu.Unlock()
 	}()
 	welcomeCtx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
-	err = wsjson.Write(welcomeCtx, conn, protocol.Message{Type: "welcome", Version: protocol.WireVersion})
+	err = wsjson.Write(welcomeCtx, conn, protocol.Message{Type: "welcome", Version: protocol.WireVersion, Component: "hub", BuildVersion: protocol.Version})
 	cancel()
 	if err != nil {
 		return
@@ -467,6 +485,13 @@ func (h *Hub) heartbeat(d *deviceConn, interval, timeout time.Duration) {
 				d.close()
 				return
 			}
+			h.mu.Lock()
+			if h.connections[d.id] == d {
+				info := h.known[d.id]
+				info.LastSeen = time.Now().UTC()
+				h.known[d.id] = info
+			}
+			h.mu.Unlock()
 		}
 	}
 }
@@ -521,6 +546,13 @@ func (h *Hub) client(principal string) (config.Client, error) {
 	cfg, err := h.store.Snapshot()
 	if err != nil {
 		return config.Client{}, errors.New("configuration unavailable")
+	}
+	if cfg.OAuth != nil && h.oauth != nil && cfg.OAuth.Issuer == h.oauth.Issuer && strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp" == h.oauth.Resource && slices.Equal(cfg.OAuth.Scopes, h.oauthScopes) {
+		for _, p := range cfg.OAuth.Principals {
+			if oauth.MatchesPrincipal(principal, h.oauth.Issuer, h.oauth.Resource, p.Subject) {
+				return config.Client{ID: principal, Devices: p.Devices}, nil
+			}
+		}
 	}
 	for _, c := range cfg.Clients {
 		if c.ID == principal || clientPrincipal(c) == principal {
