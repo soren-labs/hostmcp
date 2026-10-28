@@ -364,3 +364,101 @@ func TestHeartbeatMarksUnresponsiveDeviceOffline(t *testing.T) {
 	go h.heartbeat(d, 10*time.Millisecond, 30*time.Millisecond)
 	eventually(t, func() bool { return !online(h) })
 }
+
+func TestSameMachineAccountsHaveIndependentNodeScopes(t *testing.T) {
+	h, srv, store := fixture(t)
+	if err := store.Update(func(c *config.Hub) error {
+		c.Devices[0].ExpectedUser = "worker"
+		c.Devices[1].ExpectedUser = "root"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	workers := &recordingExecutor{}
+	roots := &recordingExecutor{}
+	for _, entry := range []struct {
+		id, token, user, uid string
+		executor             *recordingExecutor
+	}{
+		{"dev1", deviceToken, "worker", "1000", workers},
+		{"dev2", strings.Repeat("e", 43), "root", "0", roots},
+	} {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- agent.Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: entry.id, Token: entry.token, ExpectedUser: entry.user}, entry.executor, protocol.Device{ID: entry.id, Hostname: "same-machine", OS: "linux", Username: entry.user, UID: entry.uid, EUID: entry.uid})
+		}()
+		t.Cleanup(func() {
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Error("account node did not stop")
+			}
+		})
+	}
+	eventually(t, func() bool {
+		a, errA := h.ListDevices(context.Background(), "alice")
+		b, errB := h.ListDevices(context.Background(), "bob")
+		return errA == nil && errB == nil && len(a) == 1 && len(b) == 1 && a[0].Online && b[0].Online
+	})
+	alice := mcpClient(t, srv.URL, aliceToken, "2026-07-28")
+	bob := mcpClient(t, srv.URL, bobToken, "2026-07-28")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, tc := range []struct {
+		session         *mcp.ClientSession
+		allowed, denied string
+	}{{alice, "dev1", "dev2"}, {bob, "dev2", "dev1"}} {
+		result, err := tc.session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": tc.allowed, "text": "allowed"}})
+		if err != nil || result.IsError {
+			t.Fatalf("allowed account call: %+v %v", result, err)
+		}
+		beforeWorker, beforeRoot := workers.calls.Load(), roots.calls.Load()
+		result, err = tc.session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": tc.denied, "text": "denied"}})
+		if err != nil || !result.IsError || workers.calls.Load() != beforeWorker || roots.calls.Load() != beforeRoot {
+			t.Fatalf("unauthorized account was dispatched: %+v %v", result, err)
+		}
+	}
+	devices, err := h.ListDevices(ctx, "bob")
+	if err != nil || len(devices) != 1 || devices[0].Username != "root" || devices[0].EUID != "0" || devices[0].ExpectedUser != "root" {
+		t.Fatalf("account inventory missing: %+v %v", devices, err)
+	}
+	// A policy edit must take effect at dispatch without waiting for the once-per-
+	// second connection sweep; it is still only an account deployment binding.
+	if err := store.Update(func(c *config.Hub) error {
+		c.Devices[1].ExpectedUser = "worker"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := roots.calls.Load()
+	if _, err := h.Call(ctx, "bob", "dev2", "echo", json.RawMessage(`{"text":"stale binding"}`)); err == nil || roots.calls.Load() != before {
+		t.Fatal("changed account binding still dispatched")
+	}
+}
+
+func TestHubRejectsMismatchedAccountEvenIfNodeOmitsLocalBinding(t *testing.T) {
+	h, srv, store := fixture(t)
+	if err := store.Update(func(c *config.Hub) error {
+		c.Devices[0].ExpectedUser = "root"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, strings.Replace(srv.URL, "http:", "ws:", 1)+"/agent/dev1", &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": []string{"Bearer " + deviceToken}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	if err := wsjson.Write(ctx, conn, protocol.Message{Type: "hello", Version: 1, Device: &protocol.Device{ID: "dev1", Username: "worker", UID: "1000", EUID: "1000"}}); err != nil {
+		t.Fatal(err)
+	}
+	var welcome protocol.Message
+	err = wsjson.Read(ctx, conn, &welcome)
+	if websocket.CloseStatus(err) != websocket.StatusPolicyViolation || online(h) {
+		t.Fatalf("mismatched account welcomed: %+v %v", welcome, err)
+	}
+}

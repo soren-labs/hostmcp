@@ -31,6 +31,9 @@ func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info
 	if executor == nil {
 		return errors.New("executor is required")
 	}
+	if cfg.ExpectedUser != "" && (!config.ValidUser(cfg.ExpectedUser) || cfg.ExpectedUser != info.Username) {
+		return fmt.Errorf("node %s must run as OS user %q; current account is %q (effective UID %s)", cfg.DeviceID, cfg.ExpectedUser, info.Username, info.EUID)
+	}
 	info.ID = cfg.DeviceID
 	info.Online = true
 	info.Version = protocol.Version

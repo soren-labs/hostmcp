@@ -20,6 +20,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 const FormatVersion = 1
@@ -42,18 +43,28 @@ type Client struct {
 	Devices   []string `json:"devices"`
 }
 
+// A Device is one node process running as one OS account. A physical machine can
+// register multiple devices (for example, workstation-dev and workstation-root).
+// ExpectedUser is a deployment guard, not remote attestation of a trusted node.
 type Device struct {
-	ID        string `json:"id"`
-	TokenHash string `json:"token_hash"`
+	ID           string `json:"id"`
+	TokenHash    string `json:"token_hash"`
+	ExpectedUser string `json:"expected_user,omitempty"`
+}
+
+func (d Device) AllowsUser(username string) bool {
+	return d.ExpectedUser == "" || d.ExpectedUser == username
 }
 
 type Invitation struct {
-	DeviceID  string    `json:"device_id"`
-	TokenHash string    `json:"token_hash"`
-	ExpiresAt time.Time `json:"expires_at"`
+	ExpectedUser string    `json:"expected_user,omitempty"`
+	DeviceID     string    `json:"device_id"`
+	TokenHash    string    `json:"token_hash"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 type Agent struct {
+	ExpectedUser  string `json:"expected_user,omitempty"`
 	Version       int    `json:"version"`
 	HubURL        string `json:"hub_url"`
 	DeviceID      string `json:"device_id"`
@@ -62,6 +73,7 @@ type Agent struct {
 }
 
 type Invite struct {
+	ExpectedUser  string    `json:"expected_user,omitempty"`
 	Version       int       `json:"version"`
 	HubURL        string    `json:"hub_url"`
 	DeviceID      string    `json:"device_id"`
@@ -90,6 +102,20 @@ func Hash(token string) string {
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 func ValidID(id string) bool { return idPattern.MatchString(id) }
+
+// ValidUser checks the portable account name carried in an invitation. The
+// account is resolved by the node's OS, never looked up on the Hub machine.
+func ValidUser(name string) bool {
+	if name == "" || len(name) > 256 {
+		return false
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) || unicode.IsSpace(r) || strings.ContainsRune("/:\\", r) {
+			return false
+		}
+	}
+	return true
+}
 
 func Allows(client Client, device string) bool {
 	for _, id := range client.Devices {
@@ -267,11 +293,17 @@ func validate(h Hub) error {
 		}
 	}
 	for _, d := range h.Devices {
+		if d.ExpectedUser != "" && !ValidUser(d.ExpectedUser) {
+			return errors.New("invalid device account name")
+		}
 		if err := check("device", d.ID, d.TokenHash); err != nil {
 			return err
 		}
 	}
 	for _, i := range h.Invitations {
+		if i.ExpectedUser != "" && !ValidUser(i.ExpectedUser) {
+			return errors.New("invalid invitation account name")
+		}
 		if err := check("invitation", i.DeviceID, i.TokenHash); err != nil {
 			return err
 		}
@@ -355,6 +387,22 @@ func (s *Store) DeviceValid(id, hash string) bool {
 	return false
 }
 
+// DeviceValidForUser checks both the node credential and its configured account
+// binding. It must be rechecked at dispatch, so an edited binding takes effect
+// immediately even before the background connection revocation pass.
+func (s *Store) DeviceValidForUser(id, hash, username string) bool {
+	h, err := s.Snapshot()
+	if err != nil {
+		return false
+	}
+	for _, d := range h.Devices {
+		if d.ID == id && subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(hash)) == 1 {
+			return d.AllowsUser(username)
+		}
+	}
+	return false
+}
+
 func (s *Store) Redeem(id, token string) (Agent, error) {
 	var result Agent
 	err := s.Update(func(h *Hub) error {
@@ -377,15 +425,25 @@ func (s *Store) Redeem(id, token string) (Agent, error) {
 		if err != nil {
 			return err
 		}
-		h.Devices = append(h.Devices, Device{ID: id, TokenHash: Hash(secret)})
+		expectedUser := h.Invitations[index].ExpectedUser
+		h.Devices = append(h.Devices, Device{ID: id, TokenHash: Hash(secret), ExpectedUser: expectedUser})
 		h.Invitations = append(h.Invitations[:index], h.Invitations[index+1:]...)
-		result = Agent{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://")}
+		result = Agent{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, ExpectedUser: expectedUser, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://")}
 		return nil
 	})
 	return result, err
 }
 
 func (s *Store) InviteDevice(id string, ttl time.Duration) (Invite, error) {
+	return s.InviteDeviceForUser(id, "", ttl)
+}
+
+// InviteDeviceForUser binds the resulting node to a named OS account. Empty user
+// preserves the original invitation behavior for existing deployments.
+func (s *Store) InviteDeviceForUser(id, username string, ttl time.Duration) (Invite, error) {
+	if username != "" && !ValidUser(username) {
+		return Invite{}, errors.New("user must be a valid OS account name")
+	}
 	if !ValidID(id) {
 		return Invite{}, errors.New("device id must be 1-64 letters, digits, dots, underscores or hyphens")
 	}
@@ -410,8 +468,8 @@ func (s *Store) InviteDevice(id string, ttl time.Duration) (Invite, error) {
 			}
 		}
 		expires := time.Now().Add(ttl).UTC()
-		h.Invitations = append(active, Invitation{DeviceID: id, TokenHash: Hash(secret), ExpiresAt: expires})
-		out = Invite{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://"), ExpiresAt: expires}
+		h.Invitations = append(active, Invitation{DeviceID: id, TokenHash: Hash(secret), ExpectedUser: username, ExpiresAt: expires})
+		out = Invite{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, ExpectedUser: username, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://"), ExpiresAt: expires}
 		return nil
 	})
 	return out, err

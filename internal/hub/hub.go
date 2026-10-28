@@ -292,6 +292,10 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid device info")
 		return
 	}
+	if !h.store.DeviceValidForUser(id, config.Hash(token), hello.Device.Username) {
+		_ = conn.Close(websocket.StatusPolicyViolation, "device account does not match enrollment")
+		return
+	}
 	info := *hello.Device
 	info.ID = id
 	info.Online = true
@@ -367,7 +371,7 @@ func (h *Hub) heartbeat(d *deviceConn, interval, timeout time.Duration) {
 	}
 }
 func validInfo(d protocol.Device) bool {
-	return len(d.ID) <= 64 && len(d.Hostname) <= 255 && len(d.OS) <= 32 && len(d.Arch) <= 32 && len(d.Username) <= 256 && len(d.UID) <= 32 && len(d.Home) <= 4096 && len(d.Version) <= 64
+	return len(d.ID) <= 64 && len(d.Hostname) <= 255 && len(d.OS) <= 32 && len(d.Arch) <= 32 && len(d.Username) <= 256 && len(d.UID) <= 32 && len(d.EUID) <= 32 && len(d.ExpectedUser) <= 256 && len(d.Home) <= 4096 && len(d.Version) <= 64
 }
 
 func (h *Hub) recheckDevices() {
@@ -379,10 +383,10 @@ func (h *Hub) recheckDevices() {
 			return
 		case <-ticker.C:
 			cfg, cfgErr := h.store.Snapshot()
-			valid := make(map[string]string)
+			valid := make(map[string]config.Device)
 			if cfgErr == nil {
 				for _, entry := range cfg.Devices {
-					valid[entry.ID] = entry.TokenHash
+					valid[entry.ID] = entry
 				}
 			}
 			h.mu.Lock()
@@ -399,7 +403,8 @@ func (h *Hub) recheckDevices() {
 			}
 			h.mu.RUnlock()
 			for _, d := range list {
-				if valid[d.id] != d.hash {
+				entry, ok := valid[d.id]
+				if !ok || entry.TokenHash != d.hash || !entry.AllowsUser(d.info.Username) {
 					d.close()
 				}
 			}
@@ -438,6 +443,7 @@ func (h *Hub) ListDevices(_ context.Context, principal string) ([]protocol.Devic
 		if !ok {
 			info = protocol.Device{ID: entry.ID}
 		}
+		info.ExpectedUser = entry.ExpectedUser
 		_, info.Online = h.connections[entry.ID]
 		devices = append(devices, info)
 	}
@@ -458,9 +464,9 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 	if d == nil {
 		return protocol.Result{}, errors.New("device is offline; command was not dispatched")
 	}
-	if !h.store.DeviceValid(d.id, d.hash) {
+	if !h.store.DeviceValidForUser(d.id, d.hash, d.info.Username) {
 		d.close()
-		return protocol.Result{}, errors.New("device has been revoked; command was not dispatched")
+		return protocol.Result{}, errors.New("device was revoked or its account binding changed; command was not dispatched")
 	}
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

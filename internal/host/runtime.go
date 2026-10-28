@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,15 @@ func New() (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("current OS account: %w", err)
 	}
+	// Process authority follows the effective UID. Most service launches have
+	// matching real/effective UIDs; handle the other case without advertising the
+	// unprivileged real account for a privileged executor.
+	if u.Uid != strconv.Itoa(os.Geteuid()) {
+		u, err = user.LookupId(strconv.Itoa(os.Geteuid()))
+		if err != nil {
+			return nil, fmt.Errorf("effective OS account: %w", err)
+		}
+	}
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -72,7 +82,7 @@ func New() (*Runtime, error) {
 }
 
 func (r *Runtime) Info(deviceID string) protocol.Device {
-	return protocol.Device{ID: deviceID, Hostname: r.hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, Username: r.user.Username, UID: r.user.Uid, Home: r.user.HomeDir, Version: protocol.Version, Online: true}
+	return protocol.Device{ID: deviceID, Hostname: r.hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, Username: r.user.Username, UID: strconv.Itoa(os.Getuid()), EUID: strconv.Itoa(os.Geteuid()), Home: r.user.HomeDir, Version: protocol.Version, Online: true}
 }
 
 func (r *Runtime) Close() error {

@@ -130,3 +130,40 @@ func TestURLAndExpiredInvite(t *testing.T) {
 		t.Fatal("wire config missing hub_url")
 	}
 }
+
+func TestAccountBindingSurvivesInvitationAndEnrollment(t *testing.T) {
+	s, _ := fixture(t)
+	invite, err := s.InviteDeviceForUser("workstation-root", "root", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invite.ExpectedUser != "root" {
+		t.Fatalf("invitation lost account binding: %+v", invite)
+	}
+	a, err := s.Redeem(invite.DeviceID, invite.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.ExpectedUser != "root" || !s.DeviceValidForUser(a.DeviceID, Hash(a.Token), "root") {
+		t.Fatal("enrolled node lost its account binding")
+	}
+	if s.DeviceValidForUser(a.DeviceID, Hash(a.Token), "dev") {
+		t.Fatal("ordinary account accepted for a root node")
+	}
+	if s.DeviceValidForUser(a.DeviceID, Hash("wrong-token"), "root") {
+		t.Fatal("account name bypassed the device credential")
+	}
+	legacy, err := s.InviteDevice("workstation-user", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unbound, err := s.Redeem(legacy.DeviceID, legacy.Token)
+	if err != nil || unbound.ExpectedUser != "" || !s.DeviceValidForUser(unbound.DeviceID, Hash(unbound.Token), "dev") {
+		t.Fatalf("legacy invitation was not compatible: %v", err)
+	}
+	for _, name := range []string{"root\n", "two users", "../root", "user:group", "a\\b", strings.Repeat("u", 257)} {
+		if _, err := s.InviteDeviceForUser("invalid-user", name, time.Minute); err == nil {
+			t.Errorf("accepted invalid account %q", name)
+		}
+	}
+}

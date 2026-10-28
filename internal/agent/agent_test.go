@@ -236,3 +236,17 @@ func TestDisconnectCancelsAbandonedCallAndReconnectsWithoutReplay(t *testing.T) 
 		t.Fatalf("executions=%d executor closed=%v", executor.calls.Load(), executor.closed.Load())
 	}
 }
+
+func TestAccountMismatchFailsBeforeConnecting(t *testing.T) {
+	var connections atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connections.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	cfg := config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "workstation-root", Token: "0123456789012345678901234567890123456789012", ExpectedUser: "root"}
+	err := Run(context.Background(), cfg, &counterExecutor{}, protocol.Device{Username: "dev", UID: "1000", EUID: "1000"})
+	if err == nil || connections.Load() != 0 {
+		t.Fatalf("mismatched account connected: connections=%d error=%v", connections.Load(), err)
+	}
+}
