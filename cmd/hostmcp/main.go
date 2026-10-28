@@ -548,7 +548,7 @@ func agentCommand(ctx context.Context, args []string) error {
 		if _, err := config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
 		}
-		rt, err := host.New()
+		rt, err := host.NewForDevice(a.DeviceID)
 		if err != nil {
 			return err
 		}
