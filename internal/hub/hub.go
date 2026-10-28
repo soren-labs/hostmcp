@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -28,15 +30,24 @@ import (
 )
 
 type Hub struct {
-	store       *config.Store
-	handler     http.Handler
-	ctx         context.Context
-	cancel      context.CancelFunc
-	mu          sync.RWMutex
-	connections map[string]*deviceConn
-	known       map[string]protocol.Device
-	requests    chan struct{}
-	handshakes  chan struct{}
+	store           *config.Store
+	handler         http.Handler
+	ctx             context.Context
+	cancel          context.CancelFunc
+	mu              sync.RWMutex
+	connections     map[string]*deviceConn
+	known           map[string]protocol.Device
+	requests        chan struct{}
+	enrollments     chan struct{}
+	handshakes      chan struct{}
+	limitsMu        sync.Mutex
+	clientSlots     map[string]*clientLimit
+	lastDenied      atomic.Int64
+	lastConfigError atomic.Int64
+}
+type clientLimit struct {
+	slots chan struct{}
+	refs  int
 }
 type deviceConn struct {
 	id      string
@@ -59,7 +70,7 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 8), handshakes: make(chan struct{}, 8)}
+	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit)}
 	server := mcpserver.New(mcpserver.Options{Tools: tools, Remote: true, Call: h.Call, ListDevices: h.ListDevices})
 	streamable := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: protocol.MaxMessageBytes,
@@ -72,19 +83,20 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		if !ok {
 			return nil, auth.ErrInvalidToken
 		}
-		return &auth.TokenInfo{UserID: client.ID}, nil
+		return &auth.TokenInfo{UserID: clientPrincipal(client)}, nil
 	}, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true})(streamable)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("WWW-Authenticate", "Bearer realm=\"hostmcp\"")
 		if bearer(r) == "" {
+			h.auditDenied("mcp", "missing_bearer")
 			http.Error(w, "one bearer credential is required", http.StatusUnauthorized)
 			return
 		}
-		h.bounded(authHandler).ServeHTTP(w, r)
+		h.boundedClient(authHandler).ServeHTTP(w, r)
 	}))
 	mux.HandleFunc("/agent/", h.acceptAgent)
-	mux.HandleFunc("/enroll", func(w http.ResponseWriter, r *http.Request) { h.bounded(http.HandlerFunc(h.enroll)).ServeHTTP(w, r) })
+	mux.Handle("/enroll", h.bounded(h.enrollments, http.HandlerFunc(h.enroll)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", "GET")
@@ -110,14 +122,90 @@ func (h *Hub) Close() error {
 	}
 	return nil
 }
-func (h *Hub) bounded(next http.Handler) http.Handler {
+
+// Enrollment never competes with long-running MCP calls for capacity. Client
+// calls also have a four-request per-token limit so one coding agent cannot
+// starve every other principal, and a brief bounded queue absorbs bursts.
+func (h *Hub) bounded(pool chan struct{}, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1500*time.Millisecond)
+		defer cancel()
+		select {
+		case pool <- struct{}{}:
+			defer func() { <-pool }()
+		case <-ctx.Done():
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "too many active requests", 503)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func clientPrincipal(c config.Client) string {
+	// A new credential reusing the same display ID must never inherit the
+	// previous credential's terminal sessions or deduplication records.
+	return c.ID + "~" + c.TokenHash[:24]
+}
+
+func auditPrincipal(p string) string {
+	if i := strings.IndexByte(p, '~'); i >= 0 {
+		return p[:i]
+	}
+	return p
+}
+
+// Failed authentications are sampled so token sprays cannot create unbounded
+// log volume. No token, hash, request body, or command arguments are logged.
+func (h *Hub) auditDenied(endpoint, reason string) {
+	now := time.Now().UnixNano()
+	last := h.lastDenied.Load()
+	if now-last > int64(5*time.Second) && h.lastDenied.CompareAndSwap(last, now) {
+		log.Printf("event=auth_denied endpoint=%q reason=%q", endpoint, reason)
+	}
+}
+
+func (h *Hub) boundedClient(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := bearer(r)
+		if _, ok := h.store.AuthClient(token); !ok {
+			h.auditDenied("mcp", "invalid_bearer")
+			http.Error(w, "invalid bearer credential", http.StatusUnauthorized)
+			return
+		}
+		key := config.Hash(token)
+		h.limitsMu.Lock()
+		limit := h.clientSlots[key]
+		if limit == nil {
+			limit = &clientLimit{slots: make(chan struct{}, 4)}
+			h.clientSlots[key] = limit
+		}
+		limit.refs++
+		h.limitsMu.Unlock()
+		defer func() {
+			h.limitsMu.Lock()
+			limit.refs--
+			if limit.refs == 0 {
+				delete(h.clientSlots, key)
+			}
+			h.limitsMu.Unlock()
+		}()
+		ctx, cancel := context.WithTimeout(r.Context(), 1500*time.Millisecond)
+		defer cancel()
+		select {
+		case limit.slots <- struct{}{}:
+			defer func() { <-limit.slots }()
+		case <-ctx.Done():
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "principal has too many active requests; retry", 503)
+			return
+		}
 		select {
 		case h.requests <- struct{}{}:
 			defer func() { <-h.requests }()
-		default:
+		case <-ctx.Done():
 			w.Header().Set("Retry-After", "1")
-			http.Error(w, "too many active requests", 503)
+			http.Error(w, "hub has too many active requests; retry", 503)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -130,15 +218,18 @@ func (h *Hub) protect(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		cfg, err := h.store.Snapshot()
 		if err != nil {
+			h.auditDenied("http", "config_unavailable")
 			http.Error(w, "configuration unavailable", 503)
 			return
 		}
 		if !hostAllowed(r.Host, cfg) {
+			h.auditDenied("http", "invalid_host")
 			http.Error(w, "host not allowed", 403)
 			return
 		}
 		origins := r.Header.Values("Origin")
 		if len(origins) > 1 || (len(origins) == 1 && !originAllowed(origins[0], r, cfg)) {
+			h.auditDenied("http", "invalid_origin")
 			http.Error(w, "origin not allowed", 403)
 			return
 		}
@@ -245,9 +336,11 @@ func (h *Hub) enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	agent, err := h.store.Redeem(input.DeviceID, input.Token)
 	if err != nil {
+		h.auditDenied("enroll", "invalid_or_expired_invitation")
 		http.Error(w, "invalid, expired, or already used invitation", 401)
 		return
 	}
+	log.Printf("event=device_enrolled device=%q", input.DeviceID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(agent)
 }
@@ -260,6 +353,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/agent/")
 	token := bearer(r)
 	if id == "" || strings.Contains(id, "/") || !h.store.AuthDevice(id, token) {
+		h.auditDenied("agent", "invalid_credentials")
 		w.Header().Set("WWW-Authenticate", "Bearer realm=\"hostmcp-device\"")
 		http.Error(w, "invalid device credentials", 401)
 		return
@@ -285,14 +379,17 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	err = wsjson.Read(handshakeCtx, conn, &hello)
 	cancel()
 	if err != nil || hello.Type != "hello" || hello.Version != protocol.WireVersion || hello.Device == nil || hello.Device.ID != id {
+		log.Printf("event=device_rejected device=%q reason=invalid_handshake", id)
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid handshake")
 		return
 	}
 	if !validInfo(*hello.Device) {
+		log.Printf("event=device_rejected device=%q reason=invalid_info", id)
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid device info")
 		return
 	}
 	if !h.store.DeviceValidForUser(id, config.Hash(token), hello.Device.Username) {
+		log.Printf("event=device_rejected device=%q reason=account_binding", id)
 		_ = conn.Close(websocket.StatusPolicyViolation, "device account does not match enrollment")
 		return
 	}
@@ -307,9 +404,12 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	h.known[id] = info
 	h.mu.Unlock()
 	if old != nil {
+		log.Printf("event=device_replaced device=%q user=%q", id, info.Username)
 		old.close()
 	}
+	log.Printf("event=device_connected device=%q user=%q uid=%q", id, info.Username, info.EUID)
 	defer func() {
+		log.Printf("event=device_disconnected device=%q user=%q", id, info.Username)
 		d.close()
 		h.mu.Lock()
 		if h.connections[id] == d {
@@ -383,11 +483,17 @@ func (h *Hub) recheckDevices() {
 			return
 		case <-ticker.C:
 			cfg, cfgErr := h.store.Snapshot()
-			valid := make(map[string]config.Device)
-			if cfgErr == nil {
-				for _, entry := range cfg.Devices {
-					valid[entry.ID] = entry
+			if cfgErr != nil {
+				now := time.Now().UnixNano()
+				last := h.lastConfigError.Load()
+				if now-last > int64(30*time.Second) && h.lastConfigError.CompareAndSwap(last, now) {
+					log.Printf("event=config_recheck_error action=retain_connections: %v", cfgErr)
 				}
+				continue
+			}
+			valid := make(map[string]config.Device)
+			for _, entry := range cfg.Devices {
+				valid[entry.ID] = entry
 			}
 			h.mu.Lock()
 			for id := range h.known {
@@ -417,13 +523,14 @@ func (h *Hub) client(principal string) (config.Client, error) {
 		return config.Client{}, errors.New("configuration unavailable")
 	}
 	for _, c := range cfg.Clients {
-		if c.ID == principal {
+		if c.ID == principal || clientPrincipal(c) == principal {
 			return c, nil
 		}
 	}
 	return config.Client{}, errors.New("client has been revoked")
 }
 func (h *Hub) ListDevices(_ context.Context, principal string) ([]protocol.Device, error) {
+	log.Printf("event=tool_call principal=%q tool=list_devices", auditPrincipal(principal))
 	client, err := h.client(principal)
 	if err != nil {
 		return nil, err
@@ -450,7 +557,16 @@ func (h *Hub) ListDevices(_ context.Context, principal string) ([]protocol.Devic
 	sort.Slice(devices, func(i, j int) bool { return devices[i].ID < devices[j].ID })
 	return devices, nil
 }
-func (h *Hub) Call(ctx context.Context, principal, device, tool string, args json.RawMessage) (protocol.Result, error) {
+func (h *Hub) Call(ctx context.Context, principal, device, tool string, args json.RawMessage) (result protocol.Result, err error) {
+	start := time.Now()
+	requestID := "not_dispatched"
+	defer func() {
+		status := "ok"
+		if err != nil || result.Error != "" {
+			status = "error"
+		}
+		log.Printf("event=tool_call principal=%q device=%q tool=%q request_id=%q outcome=%q elapsed_ms=%d", auditPrincipal(principal), device, tool, requestID, status, time.Since(start).Milliseconds())
+	}()
 	client, err := h.client(principal)
 	if err != nil {
 		return protocol.Result{}, err
@@ -473,6 +589,7 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		return protocol.Result{}, err
 	}
 	id := hex.EncodeToString(b)
+	requestID = id
 	reply := make(chan protocol.Message, 1)
 	d.mu.Lock()
 	if len(d.pending) >= 16 {

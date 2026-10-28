@@ -16,6 +16,25 @@ import (
 	"github.com/soren-labs/hostmcp/internal/protocol"
 )
 
+func TestReviewAuthorizationRejectionBacksOffWithoutRestartLoop(t *testing.T) {
+	for _, status := range []int{401, 403} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			var attempts atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts.Add(1)
+				w.WriteHeader(status)
+			}))
+			defer srv.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
+			defer cancel()
+			err := Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: "0123456789012345678901234567890123456789012"}, &counterExecutor{}, protocol.Device{})
+			if err != nil || attempts.Load() != 1 {
+				t.Fatalf("authorization retry loop: attempts=%d err=%v", attempts.Load(), err)
+			}
+		})
+	}
+}
+
 type counterExecutor struct{ count atomic.Int64 }
 
 func (c *counterExecutor) Close() error { return nil }

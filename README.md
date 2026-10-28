@@ -12,7 +12,8 @@ IP 时，可用 Cloudflare Tunnel 发布 Hub。
 
 ## 版本与范围
 
-当前版本是 **v0.2.0**：支持 Linux 与 macOS 的多设备、系统账户级 MCP 执行服务。
+当前版本是 **v0.2.1**：支持 Linux 与 macOS 的多设备、系统账户级 MCP 执行服务，
+并修复独立验收中发现的文件元数据、原生路径、终端输入和并发请求问题。
 [Releases](https://github.com/soren-labs/hostmcp/releases) 提供 Linux/macOS 的
 amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/validation.md)
 记录五台真实机器上的六个常驻账户节点、临时 Modal 节点、真实 Agent 客户端、
@@ -53,9 +54,9 @@ Hub 负责认证、设备路由和 MCP 协议，不执行设备命令。要管�
 
 ```sh
 curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.0/scripts/install.sh \
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.1/scripts/install.sh \
   -o hostmcp-install.sh
-sh hostmcp-install.sh --version v0.2.0
+sh hostmcp-install.sh --version v0.2.1
 export PATH="$HOME/.local/bin:$PATH"
 hostmcp version
 ```
@@ -211,7 +212,7 @@ Agents run as the OS account that starts them, with real filesystem paths and no
 OS permissions. Deploy the Hub on a VPS or publish a home machine through a named
 Cloudflare Tunnel. No public IP is required on a device.
 
-Version 0.2.0 targets one trust domain, static bearer authentication, local stdio
+Version 0.2.1 targets one trust domain, static bearer authentication, local stdio
 and remote Streamable HTTP. Each registered node represents one host/account pair:
 run separate named agents for an ordinary user and root, then grant each AI client
 its own node-scoped credential. No directory or command policy layer is added.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/soren-labs/hostmcp/internal/protocol"
 )
@@ -20,22 +21,27 @@ type PatchInput struct {
 type patchHunk struct {
 	anchor   string
 	old, new []string
-	eof      bool
+	// context maps each new line to the old line it repeats, or -1 for an
+	// inserted line, so unchanged context keeps its exact original line ending.
+	context []int
+	eof     bool
 }
 type patchOp struct {
 	kind, path, move string
 	added            []string
 	hunks            []patchHunk
+	plus, minus      int
 }
+type fileIdentity struct{ dev, ino uint64 }
 type patchPlan struct {
-	op             patchOp
-	source, dest   string
-	before, after  []byte
-	mode           os.FileMode
-	symlink        bool
-	linkTarget     string
-	added, removed int
+	op            patchOp
+	source, dest  string
+	before, after []byte
+	identity      fileIdentity
+	info          os.FileInfo
 }
+
+func isHunkHeader(line string) bool { return line == "@@" || strings.HasPrefix(line, "@@ ") }
 
 func parsePatch(text string) ([]patchOp, error) {
 	if len(text) > 1<<20 {
@@ -76,6 +82,7 @@ func parsePatch(text string) ([]patchOp, error) {
 				op.added = append(op.added, lines[i][1:])
 				i++
 			}
+			op.plus = len(op.added)
 		}
 		if op.kind == "update" {
 			if i < len(lines)-1 && strings.HasPrefix(lines[i], "*** Move to: ") {
@@ -85,37 +92,46 @@ func parsePatch(text string) ([]patchOp, error) {
 				}
 				i++
 			}
-			for i < len(lines)-1 && (lines[i] == "@@" || strings.HasPrefix(lines[i], "@@ ")) {
-				h := patchHunk{}
-				if lines[i] != "@@" {
-					h.anchor = lines[i][3:]
+			// As in the upstream format, the first hunk may omit its @@ line and an
+			// empty hunk line is an empty context line.
+			for i < len(lines)-1 && !strings.HasPrefix(lines[i], "*** ") {
+				if !isHunkHeader(lines[i]) && len(op.hunks) > 0 {
+					return nil, fmt.Errorf("expected @@ before hunk line %d", i+1)
 				}
-				i++
-				count := 0
-				for i < len(lines)-1 && !strings.HasPrefix(lines[i], "*** ") && lines[i] != "@@" && !strings.HasPrefix(lines[i], "@@ ") {
-					line := lines[i]
-					if len(line) == 0 {
-						return nil, fmt.Errorf("empty hunk line %d must have a space, + or - prefix", i+1)
+				h := patchHunk{}
+				if isHunkHeader(lines[i]) {
+					if lines[i] != "@@" {
+						h.anchor = lines[i][3:]
 					}
-					switch line[0] {
-					case ' ':
+					i++
+				}
+				for i < len(lines)-1 && !strings.HasPrefix(lines[i], "*** ") && !isHunkHeader(lines[i]) {
+					line := lines[i]
+					switch {
+					case line == "" || line[0] == ' ':
+						if line != "" {
+							line = line[1:]
+						}
+						h.context = append(h.context, len(h.old))
+						h.old = append(h.old, line)
+						h.new = append(h.new, line)
+					case line[0] == '-':
 						h.old = append(h.old, line[1:])
+						op.minus++
+					case line[0] == '+':
+						h.context = append(h.context, -1)
 						h.new = append(h.new, line[1:])
-					case '-':
-						h.old = append(h.old, line[1:])
-					case '+':
-						h.new = append(h.new, line[1:])
+						op.plus++
 					default:
 						return nil, fmt.Errorf("invalid hunk line %d", i+1)
 					}
-					count++
 					i++
 				}
 				if i < len(lines)-1 && lines[i] == "*** End of File" {
 					h.eof = true
 					i++
 				}
-				if count == 0 {
+				if len(h.old) == 0 && len(h.new) == 0 {
 					return nil, errors.New("empty update hunk")
 				}
 				op.hunks = append(op.hunks, h)
@@ -135,42 +151,84 @@ func parsePatch(text string) ([]patchOp, error) {
 	return ops, nil
 }
 
-func readRegularBounded(path string) ([]byte, os.FileMode, error) {
+func identityOf(info os.FileInfo) fileIdentity {
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		return fileIdentity{dev: uint64(st.Dev), ino: uint64(st.Ino)}
+	}
+	return fileIdentity{}
+}
+
+func readBounded(f *os.File, path string) ([]byte, error) {
+	b, err := io.ReadAll(io.NewSectionReader(f, 0, (4<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > 4<<20 {
+		return nil, fmt.Errorf("%s exceeds the 4 MiB patch input limit", path)
+	}
+	if bytes.IndexByte(b, 0) >= 0 {
+		return nil, fmt.Errorf("%s is binary; use write_file or a shell command", path)
+	}
+	return b, nil
+}
+
+func readRegularBounded(path string) ([]byte, os.FileInfo, error) {
 	f, err := openRegular(path, os.O_RDONLY, 0)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return nil, 0, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, 0, fmt.Errorf("%s is not a regular file", path)
+		return nil, nil, err
 	}
 	if info.Size() > 4<<20 {
-		return nil, 0, fmt.Errorf("%s exceeds the 4 MiB patch input limit", path)
+		return nil, nil, fmt.Errorf("%s exceeds the 4 MiB patch input limit", path)
 	}
-	b, err := io.ReadAll(io.LimitReader(f, (4<<20)+1))
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(b) > 4<<20 {
-		return nil, 0, errors.New("patch input grew beyond 4 MiB")
-	}
-	if bytes.IndexByte(b, 0) >= 0 {
-		return nil, 0, fmt.Errorf("%s is binary; use write_file or a shell command", path)
-	}
-	return b, info.Mode().Perm(), nil
+	b, err := readBounded(f, path)
+	return b, info, err
 }
 
-func matchLines(lines, needle []string, from int, eof bool) (int, error) {
-	if len(needle) == 0 {
-		if eof {
-			return len(lines), nil
+type sourceLine struct{ text, ending string }
+
+// splitLines keeps each line's own terminator (LF, CRLF or CR). The first
+// terminator in the file is used for inserted lines; LF if there is none.
+func splitLines(b []byte) ([]sourceLine, string) {
+	text := string(b)
+	var lines []sourceLine
+	preferred := ""
+	start := 0
+	for i := 0; i < len(text); i++ {
+		ending := ""
+		switch {
+		case text[i] == '\n':
+			ending = "\n"
+		case text[i] == '\r' && i+1 < len(text) && text[i+1] == '\n':
+			ending = "\r\n"
+		case text[i] == '\r':
+			ending = "\r"
+		default:
+			continue
 		}
-		return from, nil
+		if preferred == "" {
+			preferred = ending
+		}
+		lines = append(lines, sourceLine{text: text[start:i], ending: ending})
+		i += len(ending) - 1
+		start = i + 1
 	}
+	if start < len(text) {
+		lines = append(lines, sourceLine{text: text[start:]})
+	}
+	if preferred == "" {
+		preferred = "\n"
+	}
+	return lines, preferred
+}
+
+// matchLines requires the context to occur exactly once at or after from. A
+// stale or repeated context is refused instead of editing a guessed location.
+func matchLines(lines []sourceLine, needle []string, from int, eof bool) (int, error) {
 	match := -1
 	for i := from; i+len(needle) <= len(lines); i++ {
 		if eof && i+len(needle) != len(lines) {
@@ -178,7 +236,7 @@ func matchLines(lines, needle []string, from int, eof bool) (int, error) {
 		}
 		ok := true
 		for j := range needle {
-			if lines[i+j] != needle[j] {
+			if lines[i+j].text != needle[j] {
 				ok = false
 				break
 			}
@@ -195,49 +253,110 @@ func matchLines(lines, needle []string, from int, eof bool) (int, error) {
 	}
 	return match, nil
 }
-func patchContent(before []byte, hunks []patchHunk) ([]byte, int, int, error) {
-	text := string(before)
-	crlf := strings.Contains(text, "\r\n")
-	normalized := strings.ReplaceAll(text, "\r\n", "\n")
-	trailing := strings.HasSuffix(normalized, "\n")
-	var lines []string
-	if normalized != "" {
-		lines = strings.Split(strings.TrimSuffix(normalized, "\n"), "\n")
-	}
-	cursor, added, removed := 0, 0, 0
+
+func patchContent(before []byte, hunks []patchHunk) ([]byte, error) {
+	lines, ending := splitLines(before)
+	finalNewline := len(lines) == 0 || lines[len(lines)-1].ending != ""
+	cursor := 0
 	for _, h := range hunks {
 		if h.anchor != "" {
-			pos, err := matchLines(lines, []string{h.anchor}, cursor, false)
-			if err != nil {
-				return nil, 0, 0, fmt.Errorf("anchor %q: %w", h.anchor, err)
+			// An anchor names the first matching line after the previous hunk,
+			// as in the upstream patch format; the hunk context below must
+			// still be unique after it.
+			pos := -1
+			for i := cursor; i < len(lines); i++ {
+				if lines[i].text == h.anchor {
+					pos = i
+					break
+				}
+			}
+			if pos < 0 {
+				return nil, fmt.Errorf("anchor %q not found after the previous hunk", h.anchor)
 			}
 			cursor = pos + 1
 		}
-		pos, err := matchLines(lines, h.old, cursor, h.eof)
-		if err != nil {
-			return nil, 0, 0, err
+		inserted := func(text string) sourceLine { return sourceLine{text: text, ending: ending} }
+		if len(h.old) == 0 {
+			// A hunk of only added lines appends at end of file, or directly
+			// after its @@ anchor when one is given.
+			at := len(lines)
+			if h.anchor != "" && !h.eof {
+				at = cursor
+			}
+			add := make([]sourceLine, 0, len(h.new))
+			for _, text := range h.new {
+				add = append(add, inserted(text))
+			}
+			lines = append(lines[:at], append(add, lines[at:]...)...)
+			if at == cursor {
+				cursor += len(add)
+			}
+			continue
 		}
-		newLines := make([]string, 0, len(lines)-len(h.old)+len(h.new))
-		newLines = append(newLines, lines[:pos]...)
-		newLines = append(newLines, h.new...)
-		newLines = append(newLines, lines[pos+len(h.old):]...)
-		lines = newLines
-		cursor = pos + len(h.new)
-		added += len(h.new)
-		removed += len(h.old)
+		old, newText, context := h.old, h.new, h.context
+		pos, err := matchLines(lines, old, cursor, h.eof)
+		if err != nil && old[len(old)-1] == "" && len(old) > 1 {
+			// A trailing empty context line often stands for the file's final
+			// newline, which is not a separate line here.
+			trimmedNew, trimmedContext := newText, context
+			if n := len(newText); n > 0 && newText[n-1] == "" && context[n-1] == len(old)-1 {
+				trimmedNew, trimmedContext = newText[:n-1], context[:n-1]
+			}
+			if p, e := matchLines(lines, old[:len(old)-1], cursor, h.eof); e == nil {
+				pos, err, old, newText, context = p, nil, old[:len(old)-1], trimmedNew, trimmedContext
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		replacement := make([]sourceLine, 0, len(newText))
+		for j, text := range newText {
+			if k := context[j]; k >= 0 && k < len(old) {
+				replacement = append(replacement, lines[pos+k])
+			} else {
+				replacement = append(replacement, inserted(text))
+			}
+		}
+		rest := append([]sourceLine{}, lines[pos+len(old):]...)
+		lines = append(append(lines[:pos], replacement...), rest...)
+		cursor = pos + len(replacement)
 	}
-	end := ""
-	if len(lines) > 0 && (trailing || len(before) == 0) {
-		end = "\n"
+	var out strings.Builder
+	for i, line := range lines {
+		out.WriteString(line.text)
+		switch {
+		case i < len(lines)-1 && line.ending == "":
+			out.WriteString(ending)
+		case i == len(lines)-1 && !finalNewline:
+			// Keep a file that had no final newline without one.
+		case i == len(lines)-1 && line.ending == "":
+			out.WriteString(ending)
+		default:
+			out.WriteString(line.ending)
+		}
+		if out.Len() > 4<<20 {
+			return nil, errors.New("patched file exceeds 4 MiB")
+		}
 	}
-	out := strings.Join(lines, "\n") + end
-	if crlf {
-		out = strings.ReplaceAll(out, "\n", "\r\n")
+	return []byte(out.String()), nil
+}
+
+// newPathKey identifies a path that does not exist yet by its resolved parent,
+// so two spellings of one new file in a patch are detected before writing.
+func newPathKey(path string) string {
+	parent, leaf := nativeDir(path), path[strings.LastIndexByte(path, '/')+1:]
+	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+		return "new:" + resolved + "/" + leaf
 	}
-	if len(out) > 4<<20 {
-		return nil, 0, 0, errors.New("patched file exceeds 4 MiB")
+	return "new:" + path
+}
+
+func checkNewLeaf(path string) error {
+	leaf := path[strings.LastIndexByte(path, '/')+1:]
+	if leaf == "" || leaf == "." || leaf == ".." {
+		return fmt.Errorf("%s does not name a file", path)
 	}
-	return []byte(out), added, removed, nil
+	return nil
 }
 
 func (r *Runtime) applyPatch(in PatchInput) (protocol.Result, error) {
@@ -246,84 +365,89 @@ func (r *Runtime) applyPatch(in PatchInput) (protocol.Result, error) {
 		return protocol.Result{}, err
 	}
 	plans := make([]patchPlan, 0, len(ops))
-	touched := map[string]bool{}
+	claimed := map[string]string{}
+	claim := func(key, path string) error {
+		if previous, ok := claimed[key]; ok {
+			return fmt.Errorf("patch refers to the same file more than once: %s and %s", previous, path)
+		}
+		claimed[key] = path
+		return nil
+	}
 	totalBytes := 0
 	for _, op := range ops {
 		path, err := r.path(op.path, in.Cwd)
 		if err != nil {
 			return protocol.Result{}, err
 		}
-		plan := patchPlan{op: op, source: path, dest: path, mode: 0644}
-		if touched[path] {
-			return protocol.Result{}, fmt.Errorf("path appears more than once in patch: %s", path)
-		}
-		touched[path] = true
-		info, statErr := os.Lstat(path)
-		if op.kind == "add" {
-			if statErr == nil {
-				return protocol.Result{}, fmt.Errorf("add target already exists: %s", path)
+		plan := patchPlan{op: op, source: path, dest: path}
+		switch op.kind {
+		case "add":
+			if err = checkNewLeaf(path); err != nil {
+				return protocol.Result{}, err
 			}
-			if !errors.Is(statErr, os.ErrNotExist) {
+			if _, statErr := os.Lstat(path); statErr == nil {
+				return protocol.Result{}, fmt.Errorf("add target already exists: %s", path)
+			} else if !errors.Is(statErr, os.ErrNotExist) {
 				return protocol.Result{}, statErr
+			}
+			if err = claim(newPathKey(path), path); err != nil {
+				return protocol.Result{}, err
 			}
 			plan.after = []byte(strings.Join(op.added, "\n"))
 			if len(op.added) > 0 {
 				plan.after = append(plan.after, '\n')
 			}
-			plan.added = len(op.added)
-		} else {
-			if statErr != nil {
-				return protocol.Result{}, statErr
-			}
-			plan.symlink = info.Mode()&os.ModeSymlink != 0
-			if plan.symlink {
-				plan.linkTarget, err = os.Readlink(path)
-				if err != nil {
-					return protocol.Result{}, err
-				}
-			}
-			if op.kind == "delete" && plan.symlink {
-				plan.before = []byte(plan.linkTarget)
-			} else {
-				plan.before, plan.mode, err = readRegularBounded(path)
-				if err != nil {
-					return protocol.Result{}, err
-				}
-			}
-			if op.kind == "update" {
-				plan.after, plan.added, plan.removed, err = patchContent(plan.before, op.hunks)
-				if err != nil {
-					return protocol.Result{}, fmt.Errorf("%s: %w", path, err)
-				}
-				if plan.symlink {
-					if op.move != "" {
-						return protocol.Result{}, errors.New("moving a symlink with apply_patch is unsupported; use an explicit shell operation")
-					}
-					plan.dest, err = filepath.EvalSymlinks(path)
-					if err != nil {
-						return protocol.Result{}, err
-					}
-					if touched[plan.dest] && plan.dest != path {
-						return protocol.Result{}, errors.New("patch aliases the same file through a symlink")
-					}
-					touched[plan.dest] = true
-				}
-			}
-		}
-		if op.move != "" {
-			plan.dest, err = r.path(op.move, in.Cwd)
+		case "delete":
+			// Deletion needs no content, so large and binary files can be removed.
+			info, err := os.Lstat(path)
 			if err != nil {
 				return protocol.Result{}, err
 			}
-			if touched[plan.dest] {
-				return protocol.Result{}, fmt.Errorf("move destination conflicts with another patch path: %s", plan.dest)
+			if !info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 {
+				return protocol.Result{}, fmt.Errorf("%s is not a regular file or symlink; use an explicit shell command", path)
 			}
-			touched[plan.dest] = true
-			if _, e := os.Lstat(plan.dest); !errors.Is(e, os.ErrNotExist) {
-				if e == nil {
-					return protocol.Result{}, fmt.Errorf("move destination exists: %s", plan.dest)
+			plan.info, plan.identity = info, identityOf(info)
+			if err = claim(fmt.Sprintf("inode:%d:%d", plan.identity.dev, plan.identity.ino), path); err != nil {
+				return protocol.Result{}, err
+			}
+		case "update":
+			if op.move != "" {
+				if info, err := os.Lstat(path); err != nil {
+					return protocol.Result{}, err
+				} else if info.Mode()&os.ModeSymlink != 0 {
+					return protocol.Result{}, errors.New("moving a symlink with apply_patch is unsupported; use an explicit shell operation")
 				}
-				return protocol.Result{}, e
+			}
+			// Opening follows symlinks; the edit applies to the file they name.
+			plan.before, plan.info, err = readRegularBounded(path)
+			if err != nil {
+				return protocol.Result{}, err
+			}
+			plan.identity = identityOf(plan.info)
+			if err = claim(fmt.Sprintf("inode:%d:%d", plan.identity.dev, plan.identity.ino), path); err != nil {
+				return protocol.Result{}, err
+			}
+			plan.after = plan.before
+			if len(op.hunks) > 0 {
+				if plan.after, err = patchContent(plan.before, op.hunks); err != nil {
+					return protocol.Result{}, fmt.Errorf("%s: %w", path, err)
+				}
+			}
+			if op.move != "" {
+				if plan.dest, err = r.path(op.move, in.Cwd); err != nil {
+					return protocol.Result{}, err
+				}
+				if err = checkNewLeaf(plan.dest); err != nil {
+					return protocol.Result{}, err
+				}
+				if _, e := os.Lstat(plan.dest); e == nil {
+					return protocol.Result{}, fmt.Errorf("move destination exists: %s", plan.dest)
+				} else if !errors.Is(e, os.ErrNotExist) {
+					return protocol.Result{}, e
+				}
+				if err = claim(newPathKey(plan.dest), plan.dest); err != nil {
+					return protocol.Result{}, err
+				}
 			}
 		}
 		totalBytes += len(plan.before) + len(plan.after)
@@ -334,23 +458,25 @@ func (r *Runtime) applyPatch(in PatchInput) (protocol.Result, error) {
 	}
 	completed := make([]map[string]any, 0, len(plans))
 	for _, plan := range plans {
-		if err = checkPatchUnchanged(plan); err == nil {
-			switch plan.op.kind {
-			case "delete":
-				err = os.Remove(plan.source)
-			case "add", "update":
-				if err = os.MkdirAll(filepath.Dir(plan.dest), 0755); err == nil {
-					err = atomicWrite(plan.dest, plan.after, plan.mode, plan.op.kind == "add" || plan.op.move != "", plan.op.kind == "add")
-				}
-				if err == nil && plan.op.move != "" {
-					if e := os.Remove(plan.source); e != nil {
-						completed = append(completed, map[string]any{"action": "created_move_destination", "path": plan.dest})
-						err = fmt.Errorf("destination written but could not remove source %s: %w", plan.source, e)
-					}
-				}
+		switch plan.op.kind {
+		case "delete":
+			err = commitDelete(plan)
+		case "add":
+			if err = os.MkdirAll(nativeDir(plan.dest), 0755); err == nil {
+				err = createFile(plan.dest, plan.after, 0644, nil)
+			}
+		case "update":
+			if plan.op.move != "" {
+				err = commitMove(plan)
+			} else {
+				err = rewriteInPlace(plan.source, plan)
 			}
 		}
 		if err != nil {
+			var partial *partialMoveError
+			if errors.As(err, &partial) {
+				completed = append(completed, map[string]any{"action": "created_move_destination", "path": plan.dest})
+			}
 			out := protocol.JSONResult(map[string]any{"applied": completed, "failed_path": plan.source, "atomic_across_files": false})
 			out.Error = fmt.Sprintf("patch commit failed after %d completed operations: %v", len(completed), err)
 			return out, nil
@@ -359,38 +485,145 @@ func (r *Runtime) applyPatch(in PatchInput) (protocol.Result, error) {
 		if plan.op.move != "" {
 			change["move_to"] = plan.dest
 		}
+		if plan.op.kind != "delete" {
+			change["lines_added"], change["lines_removed"] = plan.op.plus, plan.op.minus
+		}
 		completed = append(completed, change)
 	}
 	return protocol.JSONResult(map[string]any{"applied": completed, "atomic_across_files": false}), nil
 }
 
-func checkPatchUnchanged(p patchPlan) error {
-	if p.op.kind == "add" {
-		if _, err := os.Lstat(p.dest); errors.Is(err, os.ErrNotExist) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		return fmt.Errorf("add target appeared while planning patch: %s", p.dest)
-	}
-	if p.symlink {
-		target, err := os.Readlink(p.source)
-		if err != nil {
-			return err
-		}
-		if target != p.linkTarget {
-			return errors.New("symlink changed while planning patch")
-		}
-		if p.op.kind == "delete" {
-			return nil
-		}
-	}
-	now, _, err := readRegularBounded(p.source)
+func commitDelete(p patchPlan) error {
+	info, err := os.Lstat(p.source)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(now, p.before) {
+	if identityOf(info) != p.identity {
+		return fmt.Errorf("%s was replaced while planning patch", p.source)
+	}
+	return os.Remove(p.source)
+}
+
+// rewriteInPlace edits the existing inode through a descriptor, like an
+// editor saving in place. Owner, group, full mode, hard links, ACLs and
+// extended attributes stay as they are, and a file writable by this account
+// can be patched even when its directory is not. The descriptor is checked to
+// be the planned file with the planned content before any byte is written.
+// Growth is reserved first where the filesystem supports it, and a failed
+// write restores the original bytes.
+func rewriteInPlace(path string, p patchPlan) (err error) {
+	f, err := openRegular(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close %s after patching: %w", path, closeErr)
+		}
+	}()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if identityOf(info) != p.identity {
+		return fmt.Errorf("%s was replaced while planning patch", path)
+	}
+	current, err := readBounded(f, path)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, p.before) {
+		return fmt.Errorf("file changed while planning patch: %s", path)
+	}
+	if bytes.Equal(p.after, p.before) {
+		return nil
+	}
+	prefix := 0
+	for prefix < len(p.before) && prefix < len(p.after) && p.before[prefix] == p.after[prefix] {
+		prefix++
+	}
+	if len(p.after) > len(p.before) {
+		if err = reserveSpace(f, int64(len(p.after))); err != nil {
+			return fmt.Errorf("cannot reserve space to patch %s; the file is unchanged: %w", path, err)
+		}
+	}
+	_, err = f.WriteAt(p.after[prefix:], int64(prefix))
+	if err == nil && len(p.after) < len(p.before) {
+		err = f.Truncate(int64(len(p.after)))
+	}
+	// POSIX write and truncate may clear setuid/setgid bits even when the
+	// inode itself is retained. Restore the original mode using the already
+	// verified descriptor rather than replacing the file on disk.
+	if err == nil && fmodeNeedsRestore(info.Mode()) {
+		err = f.Chmod(info.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky))
+	}
+	if err != nil {
+		_, restoreErr := f.WriteAt(p.before[prefix:], int64(prefix))
+		if restoreErr == nil {
+			restoreErr = f.Truncate(int64(len(p.before)))
+		}
+		if restoreErr == nil {
+			restoreErr = f.Chmod(info.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky))
+		}
+		if restoreErr == nil {
+			restoreErr = f.Sync()
+		}
+		if restoreErr != nil {
+			return fmt.Errorf("writing %s failed and its original content could not be restored (%v); inspect the file: %w", path, restoreErr, err)
+		}
+		return fmt.Errorf("writing %s failed; its original content was restored: %w", path, err)
+	}
+	if err = f.Sync(); err != nil {
+		return fmt.Errorf("patched content of %s was written but could not be flushed to disk: %w", path, err)
+	}
+	return nil
+}
+
+func fmodeNeedsRestore(mode os.FileMode) bool {
+	return mode&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0
+}
+
+type partialMoveError struct{ err error }
+
+func (e *partialMoveError) Error() string { return e.err.Error() }
+func (e *partialMoveError) Unwrap() error { return e.err }
+
+// commitMove gives the same inode its new name, as rename(2) and mv do, so the
+// moved file keeps its owner, mode, links and attributes. link+unlink never
+// replaces a destination that appeared after planning. Across filesystems the
+// file is copied instead, keeping its mode and, when permitted, its owner.
+func commitMove(p patchPlan) error {
+	if err := os.MkdirAll(nativeDir(p.dest), 0755); err != nil {
+		return err
+	}
+	linkErr := os.Link(p.source, p.dest)
+	if linkErr == nil {
+		if err := rewriteInPlace(p.dest, p); err != nil {
+			if removeErr := os.Remove(p.dest); removeErr != nil {
+				return &partialMoveError{fmt.Errorf("%w; the new name %s could not be removed: %v", err, p.dest, removeErr)}
+			}
+			return err
+		}
+		if err := os.Remove(p.source); err != nil {
+			return &partialMoveError{fmt.Errorf("destination written but could not remove source %s: %w", p.source, err)}
+		}
+		return nil
+	}
+	if !errors.Is(linkErr, syscall.EXDEV) && !errors.Is(linkErr, syscall.EPERM) && !errors.Is(linkErr, syscall.ENOTSUP) && !errors.Is(linkErr, syscall.EMLINK) {
+		return linkErr
+	}
+	current, info, err := readRegularBounded(p.source)
+	if err != nil {
+		return err
+	}
+	if identityOf(info) != p.identity || !bytes.Equal(current, p.before) {
 		return fmt.Errorf("file changed while planning patch: %s", p.source)
+	}
+	if err = createFile(p.dest, p.after, 0600, info); err != nil {
+		return err
+	}
+	if err = os.Remove(p.source); err != nil {
+		return &partialMoveError{fmt.Errorf("destination written but could not remove source %s: %w", p.source, err)}
 	}
 	return nil
 }
@@ -404,7 +637,7 @@ func createPatchTempWithMode(dir string, mode os.FileMode) (*os.File, error) {
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return nil, err
 		}
-		name := filepath.Join(dir, fmt.Sprintf(".hostmcp-patch-%x", nonce))
+		name := nativeJoin(dir, fmt.Sprintf(".hostmcp-patch-%x", nonce))
 		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, mode)
 		if !errors.Is(err, os.ErrExist) {
 			return f, err
@@ -413,21 +646,25 @@ func createPatchTempWithMode(dir string, mode os.FileMode) (*os.File, error) {
 	return nil, errors.New("could not allocate a unique patch temporary file")
 }
 
-func atomicWrite(path string, data []byte, mode os.FileMode, noOverwrite, newFile bool) error {
-	var f *os.File
-	var err error
-	if newFile {
-		f, err = createPatchTempWithMode(filepath.Dir(path), mode)
-	} else {
-		f, err = os.CreateTemp(filepath.Dir(path), ".hostmcp-patch-*")
-	}
+// createFile writes a complete new file and installs it with link(2), which
+// never replaces an existing destination. With like set, the copy takes that
+// file's owner when permitted and its mode; set-ID bits are kept only if the
+// owner was preserved, so a copy never gains another account's set-ID bit.
+func createFile(path string, data []byte, mode os.FileMode, like os.FileInfo) error {
+	f, err := createPatchTempWithMode(nativeDir(path), mode)
 	if err != nil {
 		return err
 	}
 	temp := f.Name()
 	defer os.Remove(temp)
-	if !newFile {
-		if err = f.Chmod(mode); err != nil {
+	if like != nil {
+		perm := like.Mode() & (os.ModePerm | os.ModeSticky | os.ModeSetuid | os.ModeSetgid)
+		if st, ok := like.Sys().(*syscall.Stat_t); ok {
+			if f.Chown(int(st.Uid), int(st.Gid)) != nil {
+				perm &^= os.ModeSetuid | os.ModeSetgid
+			}
+		}
+		if err = f.Chmod(perm); err != nil {
 			f.Close()
 			return err
 		}
@@ -443,15 +680,5 @@ func atomicWrite(path string, data []byte, mode os.FileMode, noOverwrite, newFil
 	if err = f.Close(); err != nil {
 		return err
 	}
-	if noOverwrite {
-		return os.Link(temp, path)
-	}
-	current, err := os.Lstat(path)
-	if err != nil {
-		return err
-	}
-	if !current.Mode().IsRegular() {
-		return fmt.Errorf("atomic update target %s is no longer a regular file", path)
-	}
-	return os.Rename(temp, path)
+	return os.Link(temp, path)
 }

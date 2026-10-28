@@ -197,7 +197,7 @@ func TestSDKProtocolVersionsAndScopes(t *testing.T) {
 				t.Fatalf("call: result=%+v err=%v", result, err)
 			}
 			raw, _ := json.Marshal(result.StructuredContent)
-			if !bytes.Contains(raw, []byte("\"principal\":\"alice\"")) {
+			if !bytes.Contains(raw, []byte("\"principal\":\""+clientPrincipal(config.Client{ID: "alice", TokenHash: config.Hash(aliceToken)})+"\"")) {
 				t.Fatalf("wrong principal: %s", raw)
 			}
 			// Required argument validation happens before dispatch.

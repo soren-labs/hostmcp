@@ -7,7 +7,7 @@ COPY . .
 # BuildKit supplies the target platform; do not force an amd64 binary on arm64.
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=0.1.0
+ARG VERSION=0.2.1
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \

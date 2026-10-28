@@ -53,9 +53,9 @@ Enroll a separate root node with its own invitation, configuration and name:
 
 ```sh
 sudo /usr/local/bin/hostmcp agent enroll --invite /root/root-invitation.json \
-  --config /etc/hostmcp/root.json
+  --config /var/lib/hostmcp/root.json
 sudo /usr/local/bin/hostmcp service install --system --user root \
-  --role agent --name hostmcp-workstation-root --config /etc/hostmcp/root.json
+  --role agent --name hostmcp-workstation-root --config /var/lib/hostmcp/root.json
 ```
 
 A root service requires root-owned binary/configuration paths whose parents

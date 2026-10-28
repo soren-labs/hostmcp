@@ -4,6 +4,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        VERSION: ${HOSTMCP_VERSION:-0.2.1}
     image: hostmcp:local
     command: ["hub", "serve", "--config", "/state/hub.json"]
     ports:

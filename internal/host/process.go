@@ -60,6 +60,7 @@ type session struct {
 	input                       *os.File
 	output                      *os.File
 	inputClosed                 bool
+	inputPending                bool
 	startedAt, finishedAt       time.Time
 	exitCode                    *int
 	signal                      string
@@ -116,6 +117,13 @@ func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInpu
 	cwd, err = r.path(cwd, "")
 	if err != nil {
 		return protocol.Result{}, err
+	}
+	// chdir resolves ".." after symlinks; a logical PWD containing ".." would be
+	// reinterpreted lexically by shells. Use the physical directory in that case.
+	if hasDotDot(cwd) {
+		if cwd, err = filepath.EvalSymlinks(cwd); err != nil {
+			return protocol.Result{}, err
+		}
 	}
 	info, err := os.Stat(cwd)
 	if err != nil {
@@ -456,6 +464,9 @@ func (s *session) snapshotLocked() map[string]any {
 		command = string(prefix[:completeUTF8Prefix(prefix)])
 	}
 	o := map[string]any{"session_id": s.id, "pid": s.pid, "running": s.finishedAt.IsZero(), "tty": s.tty, "started_at": s.startedAt, "cwd": s.cwd, "command": command, "command_truncated": commandTruncated, "command_bytes": len(s.command), "buffered_bytes": len(s.pending), "dropped_bytes_total": s.totalDropped + s.dropped, "timed_out": s.timedOut}
+	if s.inputPending {
+		o["stdin_pending"] = true
+	}
 	if s.exitCode != nil {
 		o["exit_code"] = *s.exitCode
 	}
@@ -561,6 +572,7 @@ func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInpu
 	s.mu.Lock()
 	finished := !s.finishedAt.IsZero()
 	inputClosed := s.inputClosed
+	inputPending := s.inputPending
 	s.mu.Unlock()
 	if (in.Chars != "" || in.Signal != "" || in.CloseStdin || in.Rows > 0) && finished {
 		return protocol.Result{}, errors.New("session has already exited; poll without input to read its remaining output")
@@ -584,18 +596,25 @@ func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInpu
 			return protocol.Result{}, err
 		}
 	}
+	queued := false
 	if in.Chars != "" || in.CloseStdin {
 		if inputClosed {
 			return protocol.Result{}, errors.New("stdin is closed")
+		}
+		if inputPending {
+			return protocol.Result{}, errors.New("earlier stdin input is still waiting for the process to read it; the session is still running. Poll without chars until stdin_pending is absent, then send more input or close stdin")
 		}
 		chars := in.Chars
 		if in.CloseStdin && s.tty {
 			chars += "\x04"
 		}
 		if chars != "" {
-			if err = s.writeInput(ctx, []byte(chars)); err != nil {
+			if queued, err = s.writeInput(ctx, []byte(chars)); err != nil {
 				return protocol.Result{}, err
 			}
+		}
+		if queued && in.CloseStdin && !s.tty {
+			return protocol.Result{}, errors.New("stdin input was queued but not yet read, so stdin was left open; the session is still running. Poll until stdin_pending is absent, then close stdin")
 		}
 		if in.CloseStdin && !s.tty {
 			s.mu.Lock()
@@ -611,27 +630,41 @@ func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInpu
 	if err != nil {
 		return protocol.Result{}, err
 	}
+	if queued {
+		out["stdin_note"] = "the process did not read all input within 5 seconds; the rest stays queued in order and the process keeps running"
+	}
 	return protocol.JSONResult(out), nil
 }
 
-func (s *session) writeInput(ctx context.Context, b []byte) error {
-	// A non-reading child must not pin a tool call indefinitely. Close its input
-	// (or PTY) and stop its owned process group if a write cannot complete.
+// stdinWait bounds how long one tool call waits for a child to read its input.
+var stdinWait = 5 * time.Second
+
+// writeInput delivers input like a terminal paste: a child that is busy and not
+// reading yet keeps running, and the unread remainder stays queued in order.
+// Only one write is outstanding, so later input cannot overtake it. It reports
+// whether input is still queued after the bounded wait.
+func (s *session) writeInput(ctx context.Context, b []byte) (bool, error) {
+	s.mu.Lock()
+	s.inputPending = true
+	s.mu.Unlock()
 	finished := make(chan error, 1)
-	go func() { _, err := s.input.Write(b); finished <- err }()
-	t := time.NewTimer(5 * time.Second)
+	go func() {
+		_, err := s.input.Write(b)
+		s.mu.Lock()
+		s.inputPending = false
+		s.mu.Unlock()
+		s.wake()
+		finished <- err
+	}()
+	t := time.NewTimer(stdinWait)
 	defer t.Stop()
 	select {
 	case err := <-finished:
-		return err
+		return false, err
 	case <-ctx.Done():
-		_ = s.input.Close()
-		s.stop("TERM", false)
-		return fmt.Errorf("stdin write cancelled; session %s was stopped to release blocked input: %w", s.id, ctx.Err())
+		return true, fmt.Errorf("call cancelled while session %s had not read all input; the input stays queued and the session is still running: %w", s.id, ctx.Err())
 	case <-t.C:
-		_ = s.input.Close()
-		s.stop("TERM", false)
-		return errors.New("stdin did not accept input within 5 seconds; session stopped")
+		return true, nil
 	}
 }
 

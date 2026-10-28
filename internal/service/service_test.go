@@ -49,6 +49,19 @@ func TestRenderPreservesLiteralPaths(t *testing.T) {
 	}
 }
 
+func TestReviewSystemdExecEscapesDollarLiterals(t *testing.T) {
+	unit, err := Render("linux", "hostmcp-audit", "agent", "/bin/$BIN", "/tmp/${HOME} $$ spaced%path.json", "/home/a", "/bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(unit, `ExecStart="/bin/$$BIN" agent run --config "/tmp/$${HOME} $$$$ spaced%%path.json"`) {
+		t.Fatalf("systemd ExecStart would expand a literal configuration filename:\n%s", unit)
+	}
+	if !strings.Contains(unit, `Environment="HOME=/home/a"`) {
+		t.Fatal("normal Environment= syntax was corrupted")
+	}
+}
+
 func TestServiceCarriesLoginShell(t *testing.T) {
 	unit, _ := Render("linux", "hostmcp-agent", "agent", "/bin/hostmcp", "/tmp/cfg", "/home/test", "/bin")
 	unit, err := withShell("linux", unit, "/bin/bash")

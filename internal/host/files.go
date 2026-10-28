@@ -13,7 +13,6 @@ import (
 	_ "image/png"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -313,7 +312,7 @@ func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {
 		mode = os.FileMode(n)
 	}
 	if in.CreateParents {
-		if err = os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		if err = os.MkdirAll(nativeDir(path), 0755); err != nil {
 			return protocol.Result{}, err
 		}
 	}

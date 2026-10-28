@@ -424,8 +424,8 @@ func TestSpecialFilesCannotBlockFileTools(t *testing.T) {
 	if entry["type"] != "special" {
 		t.Fatalf("read should return FIFO metadata: %#v", entry)
 	}
-	if err := atomicWrite(fifo, []byte("do not replace FIFO"), 0600, false, false); err == nil {
-		t.Fatal("atomic patch write replaced a special-file target")
+	if err := rewriteInPlace(fifo, patchPlan{before: []byte("before\n"), after: []byte("do not write FIFO\n")}); err == nil || !strings.Contains(err.Error(), "regular") {
+		t.Fatalf("in-place patch write accepted a special-file target: %v", err)
 	}
 	info, err := os.Lstat(fifo)
 	if err != nil || info.Mode()&os.ModeNamedPipe == 0 {
