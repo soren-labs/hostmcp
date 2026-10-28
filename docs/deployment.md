@@ -30,6 +30,17 @@ init、device invite、agent enroll/run 组成，本页补充网络与常驻服�
 目录设置 0700，秘密文件设置 0600。不要把部署状态放进 Git checkout。通过
 hostmcp doctor 和 device_info 确认运行账户、主目录与实际环境。
 
+Hub 若以独立服务账户运行，本机 `hub configure`、`device invite/revoke` 和
+`token create/update/rotate/revoke` 等管理命令也应使用该账户。例如：
+
+```sh
+sudo -u hostmcp /usr/local/bin/hostmcp device invite \
+  --config /var/lib/hostmcp/hub.json --id workstation-worker --user worker \
+  --output /var/lib/hostmcp/workstation-worker-invite.json
+```
+
+这样配置、锁文件和生成的邀请始终由 Hub 账户持有，配置目录也能保持正确权限。
+
 ## Cloudflare named Tunnel：VPS 与家庭设备通用
 
 需要 Cloudflare 账户、用于发布应用的域名，以及能出站联网的 Hub 机器。域名
