@@ -141,3 +141,13 @@ func TestRootServiceRejectsUserOwnedPaths(t *testing.T) {
 		t.Fatal("root service accepted a replaceable executable")
 	}
 }
+
+func TestLookupRootAccount(t *testing.T) {
+	a, err := lookupAccount("root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.uid != 0 || a.name != "root" || !filepath.IsAbs(a.home) || !filepath.IsAbs(a.shell) {
+		t.Fatalf("invalid native root account: %+v", a)
+	}
+}
