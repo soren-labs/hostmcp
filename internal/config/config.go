@@ -195,6 +195,7 @@ func WriteSecret(path string, data []byte, replace bool) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
+	var original os.FileInfo
 	if st, err := os.Lstat(path); err == nil {
 		if !replace {
 			return fmt.Errorf("refusing to overwrite %s", path)
@@ -202,6 +203,7 @@ func WriteSecret(path string, data []byte, replace bool) error {
 		if !st.Mode().IsRegular() {
 			return errors.New("refusing to replace a non-regular configuration file")
 		}
+		original = st
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -211,7 +213,13 @@ func WriteSecret(path string, data []byte, replace bool) error {
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
-	if err = f.Chmod(0600); err == nil {
+	if original != nil {
+		err = preserveOwner(f, original)
+	}
+	if err == nil {
+		err = f.Chmod(0600)
+	}
+	if err == nil {
 		_, err = f.Write(data)
 	}
 	if err == nil {
@@ -235,6 +243,31 @@ func WriteSecret(path string, data []byte, replace bool) error {
 	if d, e := os.Open(dir); e == nil {
 		_ = d.Sync()
 		_ = d.Close()
+	}
+	return nil
+}
+
+// preserveOwner keeps an administrator's atomic replacement readable and
+// writable by the service account. Do this on the temporary file before rename:
+// if the caller cannot preserve ownership, the original stays untouched.
+func preserveOwner(f *os.File, original os.FileInfo) error {
+	want, ok := original.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("cannot determine configuration ownership")
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	got, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("cannot determine replacement ownership")
+	}
+	if got.Uid == want.Uid && got.Gid == want.Gid {
+		return nil
+	}
+	if err := f.Chown(int(want.Uid), int(want.Gid)); err != nil {
+		return fmt.Errorf("cannot preserve configuration owner %d:%d: %w", want.Uid, want.Gid, err)
 	}
 	return nil
 }
@@ -325,15 +358,46 @@ func validate(h Hub) error {
 func Validate(h Hub) error { return validate(h) }
 
 func (s *Store) Update(fn func(*Hub) error) error {
-	lock, err := os.OpenFile(s.Path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	configInfo, err := os.Lstat(s.Path)
 	if err != nil {
 		return err
 	}
+	if !configInfo.Mode().IsRegular() {
+		return errors.New("configuration must be a regular file")
+	}
+	if owner := configInfo.Sys().(*syscall.Stat_t).Uid; os.Geteuid() != 0 && uint32(os.Geteuid()) != owner {
+		return errors.New("configuration must be updated by its owner or an administrator")
+	}
+	lockPath := s.Path + ".lock"
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return fmt.Errorf("open configuration lock %s (use the configuration owner or an administrator): %w", lockPath, err)
+	}
 	defer lock.Close()
+	lockInfo, err := lock.Stat()
+	if err != nil {
+		return err
+	}
+	if !lockInfo.Mode().IsRegular() || lockInfo.Sys().(*syscall.Stat_t).Nlink != 1 {
+		return errors.New("configuration lock must be a regular file with one link")
+	}
 	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		return err
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	configInfo, err = os.Lstat(s.Path)
+	if err != nil {
+		return err
+	}
+	if !configInfo.Mode().IsRegular() {
+		return errors.New("configuration must be a regular file")
+	}
+	if err = preserveOwner(lock, configInfo); err != nil {
+		return fmt.Errorf("configuration lock: %w", err)
+	}
+	if err = lock.Chmod(0600); err != nil {
+		return fmt.Errorf("configuration lock permissions: %w", err)
+	}
 	h, err := s.Snapshot()
 	if err != nil {
 		return err
