@@ -12,21 +12,24 @@ IP 时，可用 Cloudflare Tunnel 发布 Hub。
 
 ## 版本与范围
 
-当前版本是 **v0.2.1**：支持 Linux 与 macOS 的多设备、系统账户级 MCP 执行服务，
-并修复独立验收中发现的文件元数据、原生路径、终端输入和并发请求问题。
+当前源码是 **v0.2.3-dev（尚未发布）**，基于 v0.2.2：支持 Linux 与 macOS 的
+多设备、系统账户级 MCP 执行服务，并新增可选的 Hub Cloudflare Access JWT 验证。
 [Releases](https://github.com/soren-labs/hostmcp/releases) 提供 Linux/macOS 的
 amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/validation.md)
 记录五台真实机器上的六个常驻账户节点、临时 Modal 节点、真实 Agent 客户端、
 低配 EC2 部署及 200 个模拟节点的验证范围。
 
 项目针对个人或单个信任域的自部署实例，保留静态 bearer、原生 Agent、本地
-stdio 与远程 Streamable HTTP。**本源码新增（尚未发布）**：可选外部 OAuth 2.1
-资源服务器、独立 Hub/Agent 角色产物与本地固定版本 Agent 更新器。现有配置、
+stdio 与远程 Streamable HTTP。v0.2.2 包含可选外部 OAuth 2.1 资源服务器、独立
+Hub/Agent 角色产物与本地固定版本 Agent 更新器。**v0.2.3 新增（尚未发布）**：
+[Cloudflare Access Managed OAuth 后端 JWT 验证](docs/cloudflare-access.md)。现有配置、
 节点凭证和 wire v1 保持有效；OAuth 身份必须显式授予节点，不继承 owner 权限。
+Access 身份按已验证的 email 显式映射节点；Agent、设备凭证和 wire 协议不变。
 见 [OAuth 配置](docs/oauth.md)、[组件兼容与更新](docs/components-updates.md)。
 多租户 SaaS、桌面键鼠、截图、Windows 和浏览器自动化不在当前范围。
 各客户端的实测状态见 [客户端接入](docs/clients.md)，已有 v0.2.1 验证不代表新增
-OAuth 或更新器已在那些线上环境验收。
+OAuth、Access 登录或更新器已在那些线上环境验收。真实 ChatGPT 经 Cloudflare
+Access 的 OAuth 登录仍未验收；本次仅使用隔离的签名 JWT 与官方 MCP SDK 测试。
 
 ## 工作方式
 
@@ -54,19 +57,20 @@ Hub 负责认证、设备路由和 MCP 协议，不执行设备命令。要管�
 
 ## 安装
 
-使用预编译版本无需安装 Go。下载安装脚本，然后指定版本：
+使用预编译版本无需安装 Go。以下固定到 v0.2.2 基线；本次 v0.2.3 Access 功能
+需从源码构建或等待发布。下载安装脚本，然后指定版本：
 
 ```sh
 curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.1/scripts/install.sh \
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.2/scripts/install.sh \
   -o hostmcp-install.sh
-sh hostmcp-install.sh --version v0.2.1
+sh hostmcp-install.sh --version v0.2.2
 export PATH="$HOME/.local/bin:$PATH"
 hostmcp version
 ```
 
 安装器检测 Linux/macOS 与 amd64/arm64，下载对应归档并校验 SHA-256，安装到
-**~/.local/bin**。v0.2.1 的 Hub 与 Agent 使用同一文件。新源码的发布脚本另外生成
+**~/.local/bin**。发布脚本另外生成
 `hostmcp-hub` / `hostmcp-agent`；安装器用 `--role hub|agent` 选择，各自升级，
 原 `hostmcp` 产物和默认安装方式保留。服务配置在后续步骤完成。
 
@@ -218,13 +222,18 @@ Agents run as the OS account that starts them, with real filesystem paths and no
 OS permissions. Deploy the Hub on a VPS or publish a home machine through a named
 Cloudflare Tunnel. No public IP is required on a device.
 
-The published v0.2.1 targets one trust domain, static bearer authentication, local stdio
+HostMCP targets one trust domain, static bearer authentication, local stdio
 and remote Streamable HTTP. Each registered node represents one host/account pair:
 run separate named agents for an ordinary user and root, then grant each AI client
 its own node-scoped credential. No directory or command policy layer is added.
 System services and user services support Linux and macOS; Windows is out of scope.
-This source adds optional [external OAuth authorization](docs/oauth.md), separate
-Hub/Agent artifacts and a [pinned opt-in updater](docs/components-updates.md).
+The v0.2.2 baseline includes optional [external OAuth authorization](docs/oauth.md),
+separate Hub/Agent artifacts and a [pinned opt-in updater](docs/components-updates.md).
+This **v0.2.3-dev (unreleased)** source adds optional Hub-only
+[Cloudflare Access Managed OAuth assertion validation](docs/cloudflare-access.md).
+Access handles opaque client OAuth tokens at the edge; the Hub verifies the signed
+assertion and maps emails to explicit device IDs. Existing bearer/OAuth modes remain
+independent. Real ChatGPT login through Cloudflare Access has not been tested.
 Wire-v1 Hub-only upgrades do not require Agent replacement for unchanged native
 operations. OAuth product compatibility and native platforms require their own
 acceptance tests. There is no built-in identity provider, universal client support,

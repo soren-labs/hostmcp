@@ -1,8 +1,7 @@
 # Hub and Agent lifecycle
 
-This source tree keeps `hostmcp` as the original compatibility binary and adds
-`hostmcp-hub` and `hostmcp-agent` artifacts. These new artifacts are not present in
-the already published v0.2.1 release. All variants share Go source and may share a
+The v0.2.2 baseline keeps `hostmcp` as the original compatibility binary and adds
+`hostmcp-hub` and `hostmcp-agent` artifacts. All variants share Go source and may share a
 release tag; each has a separate archive, destination path and deployment lifecycle.
 
 | Artifact | Commands | Upgrade when |
@@ -40,7 +39,7 @@ when the service restarts; schedule maintenance around important work.
 Config format, private wire version and component build version are separate:
 
 - Config format remains **1**. Existing fields/tokens/nodes remain valid. Optional
-  Hub OAuth fields require this Hub version; older Hub binaries require removing
+  Hub OAuth/Cloudflare Access fields require a supporting Hub; older Hub binaries require removing
   that optional policy before rollback. No new Agent config fields are required.
 - Wire version remains **1**, independently of the release tag. Both sides require
   exactly version 1 in hello/welcome. A mismatch closes the connection before any
@@ -58,7 +57,8 @@ Config format, private wire version and component build version are separate:
   its build version; welcome optionally reports the Hub build version/component.
   Old peers ignore these new fields. Release builds inject the same version into
   CLI, MCP server, health endpoint and device inventory. Unstamped source builds
-  identify themselves as `0.2.2-dev`.
+  identify themselves as `0.2.3-dev`. The v0.2.3 Cloudflare Access identity mode is
+  [Hub-only](cloudflare-access.md); existing Agents require no replacement.
 
 `TestCompatibilityLegacyAgentWithOAuthHub` sends the old v0.2.1 hello field set to
 the new Hub and dispatches an OAuth-authorized tool over wire v1. The reverse test
@@ -183,8 +183,8 @@ require the appropriate user manager/login and macOS FileVault/TCC state.
 
 ```sh
 go test ./internal/update -count=1
-bash scripts/release.sh v0.2.2 ./build/release-smoke
-python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.2.2
+bash scripts/release.sh v0.2.3 ./build/release-smoke
+python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.2.3
 ```
 
 The packaging test builds a temporary older native Agent, installs each native

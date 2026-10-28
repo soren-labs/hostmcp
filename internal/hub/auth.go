@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/soren-labs/hostmcp/internal/cloudflareaccess"
 	"github.com/soren-labs/hostmcp/internal/config"
 	"github.com/soren-labs/hostmcp/internal/oauth"
 )
@@ -17,13 +18,34 @@ import (
 type tokenInfoKey struct{}
 
 func (h *Hub) authenticate(r *http.Request) (*auth.TokenInfo, int) {
-	token := bearer(r)
-	if token == "" {
-		return nil, 401
-	}
 	cfg, err := h.store.Snapshot()
 	if err != nil {
 		return nil, 503
+	}
+	if len(r.Header.Values("Authorization")) > 1 {
+		return nil, 401
+	}
+	assertions := r.Header.Values(cloudflareaccess.Header)
+	if len(assertions) > 0 && (h.access != nil || cfg.CloudflareAccess != nil) {
+		// A supplied assertion takes precedence. Invalid, duplicate or unmapped
+		// assertions cannot downgrade to legacy or external OAuth credentials.
+		if len(assertions) != 1 || !h.accessConfigured(cfg) {
+			return nil, 401
+		}
+		claims, err := h.access.Verify(r.Context(), assertions[0])
+		if err != nil {
+			return nil, 401
+		}
+		for _, p := range cfg.CloudflareAccess.Principals {
+			if strings.ToLower(p.Email) == claims.Email {
+				return &auth.TokenInfo{UserID: h.access.Principal(h.accessResource, claims.Email, claims.Subject), Expiration: claims.ExpiresAt.Time, Extra: map[string]any{"cloudflare_access": true}}, 0
+			}
+		}
+		return nil, 403
+	}
+	token := bearer(r)
+	if token == "" {
+		return nil, 401
 	}
 	for _, c := range cfg.Clients {
 		if len(token) >= 32 && len(token) <= 1024 && subtle.ConstantTimeCompare([]byte(config.Hash(token)), []byte(c.TokenHash)) == 1 {
@@ -49,6 +71,10 @@ func (h *Hub) authenticate(r *http.Request) (*auth.TokenInfo, int) {
 		}
 	}
 	return nil, 403
+}
+
+func (h *Hub) accessConfigured(cfg config.Hub) bool {
+	return h.access != nil && h.access.Matches(cfg.CloudflareAccess) && strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp" == h.accessResource
 }
 func (h *Hub) challenge(w http.ResponseWriter, code int) {
 	challenge := `Bearer realm="hostmcp"`

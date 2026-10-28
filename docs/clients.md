@@ -189,6 +189,10 @@ claude mcp add --transport stdio --scope local hostmcp \
 [OAuth 文档](oauth.md)。`hostmcp connect` 和 `call` 继续读取预置 token 文件，
 不执行浏览器登录。stdio 不使用 OAuth HTTP 流程。
 
+Cloudflare Access Managed OAuth 的 opaque bearer 由 edge 处理，Hub 使用独立的
+[Access assertion 配置](cloudflare-access.md)验证后端 JWT；不要将其当作外部
+OAuth JWT access token issuer。此功能仅改 Hub，真实 ChatGPT 登录仍未验收。
+
 ## 兼容性记录
 
 | 接入 | 当前声明 |

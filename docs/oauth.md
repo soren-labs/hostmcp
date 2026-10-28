@@ -1,9 +1,14 @@
 # External OAuth for remote MCP clients
 
-This source tree adds an **optional OAuth resource server** to `/mcp`. The last
-published release, v0.2.1, has only static bearer authentication. Build this source
-or use a future release that includes these changes. No external OAuth provider or
+The v0.2.2 baseline includes an **optional OAuth resource server** at `/mcp`.
+No external OAuth provider or
 Codex/Claude/ChatGPT OAuth login has been acceptance-tested by this change.
+
+For Cloudflare Access **Managed OAuth**, use the separate optional Hub
+[`cloudflare_access` policy](cloudflare-access.md) added in v0.2.3. Access issues
+opaque client bearers and forwards a signed assertion to the origin; it is not an
+external issuer for the JWT access-token mode described here. Both modes and
+legacy bearers have independent configuration and explicit node grants.
 
 The design follows the resource-server side of the
 [MCP 2026-07-28 authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).

@@ -25,6 +25,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/soren-labs/hostmcp/internal/cloudflareaccess"
 	"github.com/soren-labs/hostmcp/internal/config"
 	"github.com/soren-labs/hostmcp/internal/mcpserver"
 	"github.com/soren-labs/hostmcp/internal/oauth"
@@ -32,6 +33,8 @@ import (
 )
 
 type Hub struct {
+	access          *cloudflareaccess.Verifier
+	accessResource  string
 	oauth           *oauth.Verifier
 	oauthScopes     []string
 	metadataURL     string
@@ -77,6 +80,14 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit)}
+	if cfg.CloudflareAccess != nil {
+		h.access, err = cloudflareaccess.New(ctx, *cfg.CloudflareAccess)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		h.accessResource = strings.TrimSuffix(cfg.PublicURL, "/") + "/mcp"
+	}
 	if cfg.OAuth != nil {
 		discoveryCtx, stop := context.WithTimeout(ctx, 20*time.Second)
 		h.oauth, err = oauth.New(discoveryCtx, cfg.OAuth.Issuer, strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp")
@@ -185,7 +196,17 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(code), code)
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), tokenInfoKey{}, info))
+		ctxWithToken := context.WithValue(r.Context(), tokenInfoKey{}, info)
+		if info.Extra["cloudflare_access"] == true {
+			// Only authenticate can create this context after verifying the JWT and
+			// policy. The SDK still requires a bearer header. This public sentinel
+			// is never a credential and must not mutate the caller's request.
+			r = r.Clone(ctxWithToken)
+			r.Header.Set("Authorization", "Bearer access-assertion-validated")
+			r.Header.Del(cloudflareaccess.Header)
+		} else {
+			r = r.WithContext(ctxWithToken)
+		}
 		key := info.UserID
 		h.limitsMu.Lock()
 		limit := h.clientSlots[key]
@@ -546,6 +567,13 @@ func (h *Hub) client(principal string) (config.Client, error) {
 	cfg, err := h.store.Snapshot()
 	if err != nil {
 		return config.Client{}, errors.New("configuration unavailable")
+	}
+	if h.accessConfigured(cfg) {
+		for _, p := range cfg.CloudflareAccess.Principals {
+			if h.access.MatchesPrincipal(principal, h.accessResource, p.Email) {
+				return config.Client{ID: principal, Devices: p.Devices}, nil
+			}
+		}
 	}
 	if cfg.OAuth != nil && h.oauth != nil && cfg.OAuth.Issuer == h.oauth.Issuer && strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp" == h.oauth.Resource && slices.Equal(cfg.OAuth.Scopes, h.oauthScopes) {
 		for _, p := range cfg.OAuth.Principals {
