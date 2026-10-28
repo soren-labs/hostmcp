@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var Version = "0.2.2-dev"
+var Version = "0.2.3-dev"
 
 const WireVersion = 1
 const MaxMessageBytes = 4 << 20

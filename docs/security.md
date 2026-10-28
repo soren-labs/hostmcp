@@ -69,11 +69,13 @@ hostmcp token revoke --config /absolute/path/hub.json --id client
 Host/X-Forwarded-Host 反推出可信身份。
 
 Cloudflare Tunnel 提供网络路径与 TLS，不自动提供 HostMCP 的用户授权。
-首版支持的默认组合是 named Tunnel 加 HostMCP bearer。内置 agent、connect
-和 agent enroll 尚不能配置 Cloudflare Access 的服务凭证 headers，因此要求
-Access 的域名策略会阻断这些组件；外部客户端能附加 headers 也不能单独解决
-Agent 连接与设备加入。只有整条链路的服务凭证传递已经另外实现并验证后，
-才可添加 Access 这一层；邮箱登录页不适用于这些自动化连接。
+首版支持的默认组合是 named Tunnel 加 HostMCP bearer。v0.2.3 为 Hub `/mcp`
+增加独立可选的 [Cloudflare Access Managed OAuth assertion 验证](cloudflare-access.md)：
+Hub 验证签名、issuer、应用 AUD 和有效时间后，将 email 映射到显式节点；不信任
+单独的邮箱 header。真实 ChatGPT/Access 登录仍未验收。Access 策略应限定在目标
+MCP 路径；内置 agent、connect 和 agent enroll 仍不提供 Access 服务凭证 headers，
+不能将整域邮箱登录保护套到 `/agent/` 或 `/enroll` 自动化连接上。它们继续使用
+独立的设备凭证与一次性邀请。
 
 已发布 v0.2.1 使用静态 bearer；新源码可选 [外部 OAuth 资源服务器](oauth.md)：
 提供 RFC 9728 元数据与 challenge，验证外部 issuer 的 RS256/ES256 JWT、audience、

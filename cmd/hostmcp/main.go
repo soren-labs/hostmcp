@@ -31,7 +31,7 @@ import (
 	"github.com/soren-labs/hostmcp/internal/service"
 )
 
-var version = "0.2.2-dev"
+var version = "0.2.3-dev"
 var component = "all"
 var commit = "development"
 var buildTime = "unknown"
@@ -61,7 +61,8 @@ const usage = `HostMCP — native Linux/macOS tools, locally or across your devi
   hostmcp version
 
 Run a subcommand with --help for flags. Secrets are written to private files.
-HTTP access requires bearer authentication. Native devices use outbound connections.
+MCP HTTP requires a client credential or a configured, verified Access assertion.
+Native devices use separate credentials and outbound connections.
 `
 
 func defaultFile(name string) string {
@@ -216,11 +217,23 @@ func hubCommand(ctx context.Context, args []string) error {
 		origins := f.String("allow-origins", "", "replace extra origins, comma-separated")
 		oauthFile := f.String("oauth-file", "", "private JSON external issuer policy; restart Hub after changing discovery settings")
 		disableOAuth := f.Bool("disable-oauth", false, "remove OAuth policy; legacy credentials remain valid")
+		accessFile := f.String("cloudflare-access-file", "", "private JSON Access assertion policy; restart Hub after changing team or audience")
+		disableAccess := f.Bool("disable-cloudflare-access", false, "remove Access assertion policy; other credentials remain valid")
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
 		if *oauthFile != "" && *disableOAuth {
 			return errors.New("choose --oauth-file or --disable-oauth")
+		}
+		if *accessFile != "" && *disableAccess {
+			return errors.New("choose --cloudflare-access-file or --disable-cloudflare-access")
+		}
+		var accessPolicy *config.CloudflareAccess
+		if *accessFile != "" {
+			accessPolicy = new(config.CloudflareAccess)
+			if err := config.ReadJSON(*accessFile, accessPolicy); err != nil {
+				return err
+			}
 		}
 		var oauthPolicy *config.OAuth
 		if *oauthFile != "" {
@@ -230,6 +243,12 @@ func hubCommand(ctx context.Context, args []string) error {
 			}
 		}
 		return config.NewStore(*path).Update(func(h *config.Hub) error {
+			if accessPolicy != nil {
+				h.CloudflareAccess = accessPolicy
+			}
+			if *disableAccess {
+				h.CloudflareAccess = nil
+			}
 			if oauthPolicy != nil {
 				h.OAuth = oauthPolicy
 			}
@@ -686,7 +705,7 @@ func doctor(ctx context.Context, args []string) error {
 		return err
 	}
 	if component == "hub" {
-		return printJSON(map[string]any{"version": version, "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer and optional external OAuth JWT resource server"})
+		return printJSON(map[string]any{"version": version, "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer, optional external OAuth JWT and Cloudflare Access assertions"})
 	}
 	rt, err := host.New()
 	if err != nil {

@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.2.3 — Unreleased
+
+- Optional Hub-only Cloudflare Access Managed OAuth assertion authentication,
+  separate from external OAuth JWT access tokens and static bearers. Validates
+  RS256, exact issuer/application AUD, times and email/subject using bounded,
+  redirect-denying HTTPS JWKS fetches and a bounded key cache; startup fails closed.
+- Explicit email-to-device grants, isolated session principals, SDK header/context
+  integration, dynamic grant revocation and independent configure/disable flags.
+  Agent/enrollment credentials, config format 1 and wire version 1 are unchanged.
+- Ephemeral signed-JWT and official MCP SDK integration tests; production setup
+  instructions in [Cloudflare Access](docs/cloudflare-access.md). Actual ChatGPT
+  login through a deployed Cloudflare Access application remains untested.
+
+## v0.2.2 — 2026-10-28
 
 - Optional external OAuth resource server with RFC 9728 metadata/challenges, strict
   JWT/JWKS validation, explicit subject-to-node grants and client session isolation.
