@@ -49,7 +49,7 @@ type Device struct {
 	Home         string    `json:"home"`
 	Version      string    `json:"version"`
 	Online       bool      `json:"online"`
-	ConnectedAt  time.Time `json:"connected_at,omitempty"`
+	ConnectedAt  time.Time `json:"connected_at,omitzero"`
 }
 
 type Message struct {
