@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Optional external OAuth resource server with RFC 9728 metadata/challenges, strict
+  JWT/JWKS validation, explicit subject-to-node grants and client session isolation.
+  Existing client/device credentials and wire version 1 remain supported.
+- Separate Hub and Agent role artifacts alongside the original compatibility
+  binary; component/wire identification and mixed-generation protocol tests.
+- Opt-in local Agent updater pinned to a stable version, trusted archive SHA-256
+  and fixed HTTPS release source, with staging, atomic replace and local rollback.
+  Root updates, service restarts and post-restart recovery remain manual.
+- Scoped node heartbeat/disconnect timestamps and offline packaging/updater tests.
+
+
 ## v0.2.1 — 2026-10-28
 
 Repair release after two independent acceptance reviews of v0.2.0. The native

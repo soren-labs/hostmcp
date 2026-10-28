@@ -22,8 +22,8 @@ Agent。这样，部署在小 VPS 上的 Hub 只负责控制和转发，构建�
 
 历史提取计划优先考虑 Node/TypeScript。完成源码检查后，当前实现改用 Go：
 
-- 一个可执行文件可兼任 Hub、Agent、stdio 服务和部署 CLI。
-- 发布 linux/amd64、linux/arm64、darwin/amd64、darwin/arm64 四种产物。
+- 原兼容二进制保留；新增独立 Hub/Agent 角色产物，生命周期可分别管理。
+- 每种角色构建 linux/amd64、linux/arm64、darwin/amd64、darwin/arm64 四种目标。
 - 运行设备不必安装 Node、npm、Python 或 Electron；Python 只用于源码校验和
   发布打包，Go 只在构建时需要。
 - 基于官方 MCP Go SDK 使用标准协议实现，WebSocket 用于内部 Hub-Agent 通道。
@@ -84,6 +84,16 @@ Automation、Accessibility、屏幕录制与桌面登录状态仍然有效。Age
 
 用户服务是默认部署方式。Hub 可放进容器；设备 Agent 应原生运行，否则看到
 的用户、文件系统和进程环境主要是容器中的环境。
+
+## 组件与授权合同
+
+私有 wire v1 与发行版本独立；新增字段为可选字段，旧请求和结果语义不变。
+Hub 的 OAuth、路由和 MCP 表达升级无需替换所有节点二进制；新增原生操作需要
+明确的能力协商或 Agent 更新。详见 [组件合同](components-updates.md)。
+HTTP MCP 可选外部 issuer/JWKS 验证与 RFC 9728 元数据，scope 只控制入口，
+subject 的显式节点映射控制授权。legacy bearer、OAuth principal 和设备通道
+彼此分离。详见 [OAuth 配置](oauth.md)。节点更新只由本机可信策略触发，Hub
+没有任意二进制推送接口。
 
 ## 官方依据与版本说明
 

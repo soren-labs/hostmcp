@@ -6,7 +6,7 @@ HostMCP 将多台设备的原生文件、Shell 和进程能力提供给 MCP 客�
 VPS，也可以放在家庭 Ubuntu 或 Mac 上；每台设备主动连入 Hub。家庭网络没有公网
 IP 时，可用 Cloudflare Tunnel 发布 Hub。
 
-运行时采用 Go 单一可执行文件，不依赖 Electron、浏览器扩展、Node.js 或模型 API。
+运行时采用 Go 原生可执行文件，不依赖 Electron、浏览器扩展、Node.js 或模型 API。
 设备 Agent 以启动它的系统用户身份执行操作，使用真实系统路径。它不会额外创建
 逐目录批准流程，也不会自动获得 root 或绕过 macOS 隐私授权。
 
@@ -19,10 +19,14 @@ amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/valid
 记录五台真实机器上的六个常驻账户节点、临时 Modal 节点、真实 Agent 客户端、
 低配 EC2 部署及 200 个模拟节点的验证范围。
 
-项目针对个人或单个信任域的自部署实例：静态 bearer 认证、Linux/macOS 原生
-Agent、本地 stdio 和远程 Streamable HTTP。OAuth、多租户 SaaS、桌面键鼠控制、
-截图、Windows 和浏览器自动化不在当前范围。各客户端的实测状态见
-[客户端接入](docs/clients.md)。
+项目针对个人或单个信任域的自部署实例，保留静态 bearer、原生 Agent、本地
+stdio 与远程 Streamable HTTP。**本源码新增（尚未发布）**：可选外部 OAuth 2.1
+资源服务器、独立 Hub/Agent 角色产物与本地固定版本 Agent 更新器。现有配置、
+节点凭证和 wire v1 保持有效；OAuth 身份必须显式授予节点，不继承 owner 权限。
+见 [OAuth 配置](docs/oauth.md)、[组件兼容与更新](docs/components-updates.md)。
+多租户 SaaS、桌面键鼠、截图、Windows 和浏览器自动化不在当前范围。
+各客户端的实测状态见 [客户端接入](docs/clients.md)，已有 v0.2.1 验证不代表新增
+OAuth 或更新器已在那些线上环境验收。
 
 ## 工作方式
 
@@ -62,7 +66,9 @@ hostmcp version
 ```
 
 安装器检测 Linux/macOS 与 amd64/arm64，下载对应归档并校验 SHA-256，安装到
-**~/.local/bin**。Hub 和设备 Agent 使用同一个可执行文件；服务配置在后续步骤完成。
+**~/.local/bin**。v0.2.1 的 Hub 与 Agent 使用同一文件。新源码的发布脚本另外生成
+`hostmcp-hub` / `hostmcp-agent`；安装器用 `--role hub|agent` 选择，各自升级，
+原 `hostmcp` 产物和默认安装方式保留。服务配置在后续步骤完成。
 
 ### 从源码构建
 
@@ -212,11 +218,15 @@ Agents run as the OS account that starts them, with real filesystem paths and no
 OS permissions. Deploy the Hub on a VPS or publish a home machine through a named
 Cloudflare Tunnel. No public IP is required on a device.
 
-Version 0.2.1 targets one trust domain, static bearer authentication, local stdio
+The published v0.2.1 targets one trust domain, static bearer authentication, local stdio
 and remote Streamable HTTP. Each registered node represents one host/account pair:
 run separate named agents for an ordinary user and root, then grant each AI client
 its own node-scoped credential. No directory or command policy layer is added.
 System services and user services support Linux and macOS; Windows is out of scope.
-It does not promise OAuth, desktop automation, automatic privilege elevation, or
-compatibility with every MCP client. See the
-[validation record](docs/validation.md) for evidence and remaining limitations.
+This source adds optional [external OAuth authorization](docs/oauth.md), separate
+Hub/Agent artifacts and a [pinned opt-in updater](docs/components-updates.md).
+Wire-v1 Hub-only upgrades do not require Agent replacement for unchanged native
+operations. OAuth product compatibility and native platforms require their own
+acceptance tests. There is no built-in identity provider, universal client support,
+automatic root update or automatic privilege elevation. See the
+[validation record](docs/validation.md) for historical evidence and limitations.

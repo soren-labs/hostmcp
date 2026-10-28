@@ -31,7 +31,8 @@ import (
 	"github.com/soren-labs/hostmcp/internal/service"
 )
 
-var version = "0.2.1"
+var version = "0.2.2-dev"
+var component = "all"
 var commit = "development"
 var buildTime = "unknown"
 
@@ -46,6 +47,7 @@ const usage = `HostMCP — native Linux/macOS tools, locally or across your devi
   hostmcp device list [--config HUB.json]
   hostmcp agent enroll --invite INVITE.json [--config AGENT.json]
   hostmcp agent run [--config AGENT.json]
+  hostmcp agent update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
   hostmcp token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
   hostmcp token list [--config HUB.json]
   hostmcp token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
@@ -114,15 +116,18 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		fmt.Print(usage)
+		fmt.Print(roleUsage(component))
 		return nil
+	}
+	if err := checkRole(component, args[0]); err != nil {
+		return err
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		fmt.Print(usage)
+		fmt.Print(roleUsage(component))
 		return nil
 	case "version", "--version":
-		return printJSON(map[string]any{"version": version, "commit": commit, "build_time": buildTime, "os": runtime.GOOS, "arch": runtime.GOARCH})
+		return printJSON(map[string]any{"version": version, "commit": commit, "build_time": buildTime, "os": runtime.GOOS, "arch": runtime.GOARCH, "component": component, "wire_version": protocol.WireVersion, "config_version": config.FormatVersion})
 	case "hub":
 		return hubCommand(ctx, args[1:])
 	case "device":
@@ -209,10 +214,28 @@ func hubCommand(ctx context.Context, args []string) error {
 		insecure := f.Bool("allow-insecure", false, "allow HTTP for a trusted private test network")
 		allowedHosts := f.String("allow-hosts", "", "replace extra allowed hosts, comma-separated")
 		origins := f.String("allow-origins", "", "replace extra origins, comma-separated")
+		oauthFile := f.String("oauth-file", "", "private JSON external issuer policy; restart Hub after changing discovery settings")
+		disableOAuth := f.Bool("disable-oauth", false, "remove OAuth policy; legacy credentials remain valid")
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
+		if *oauthFile != "" && *disableOAuth {
+			return errors.New("choose --oauth-file or --disable-oauth")
+		}
+		var oauthPolicy *config.OAuth
+		if *oauthFile != "" {
+			oauthPolicy = new(config.OAuth)
+			if err := config.ReadJSON(*oauthFile, oauthPolicy); err != nil {
+				return err
+			}
+		}
 		return config.NewStore(*path).Update(func(h *config.Hub) error {
+			if oauthPolicy != nil {
+				h.OAuth = oauthPolicy
+			}
+			if *disableOAuth {
+				h.OAuth = nil
+			}
 			if *public != "" {
 				u, err := config.CheckURL(*public, *insecure)
 				if err != nil {
@@ -488,8 +511,11 @@ func tokenCommand(args []string) error {
 }
 
 func agentCommand(ctx context.Context, args []string) error {
+	if len(args) > 0 && args[0] == "update" {
+		return updateCommand(ctx, args[1:])
+	}
 	if len(args) == 0 {
-		return errors.New("use agent enroll or agent run")
+		return errors.New("use agent enroll, agent run or agent update")
 	}
 	f := flags("agent " + args[0])
 	path := f.String("config", defaultFile("agent.json"), "device agent configuration path")
@@ -567,7 +593,7 @@ func agentCommand(ctx context.Context, args []string) error {
 		defer rt.Close()
 		return agent.Run(ctx, a, rt, rt.Info(a.DeviceID))
 	default:
-		return errors.New("use agent enroll or agent run")
+		return errors.New("use agent enroll, agent run or agent update")
 	}
 }
 
@@ -637,6 +663,9 @@ func serviceCommand(args []string) error {
 	}
 	switch args[0] {
 	case "install":
+		if component != "all" && component != *role {
+			return errors.New("service role is not supported by this component")
+		}
 		if *path == "" {
 			return errors.New("--config is required")
 		}
@@ -656,6 +685,9 @@ func doctor(ctx context.Context, args []string) error {
 	if err := parse(f, args); err != nil {
 		return err
 	}
+	if component == "hub" {
+		return printJSON(map[string]any{"version": version, "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer and optional external OAuth JWT resource server"})
+	}
 	rt, err := host.New()
 	if err != nil {
 		return err
@@ -666,5 +698,5 @@ func doctor(ctx context.Context, args []string) error {
 	timeout, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	sudo := exec.CommandContext(timeout, "sudo", "-n", "true").Run() == nil
-	return printJSON(map[string]any{"version": version, "device": rt.Info("local"), "cwd": cwd, "executable": binary, "shell": os.Getenv("SHELL"), "passwordless_sudo_available": sudo, "permission_model": "native OS user; no automatic elevation; macOS privacy and SIP still apply", "transport_auth": "static bearer for HTTP; no OAuth authorization server in this release"})
+	return printJSON(map[string]any{"version": version, "device": rt.Info("local"), "cwd": cwd, "executable": binary, "shell": os.Getenv("SHELL"), "passwordless_sudo_available": sudo, "permission_model": "native OS user; no automatic elevation; macOS privacy and SIP still apply", "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer and optional external OAuth JWT resource server; no built-in authorization server"})
 }

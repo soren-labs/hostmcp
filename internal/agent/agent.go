@@ -37,6 +37,8 @@ func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info
 	info.ID = cfg.DeviceID
 	info.Online = true
 	info.Version = protocol.Version
+	info.Component = "agent"
+	info.WireVersion = protocol.WireVersion
 	slots := make(chan struct{}, maxConcurrentRequests)
 	seen := newRequestIDs()
 	var workers sync.WaitGroup
@@ -136,10 +138,10 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	if err != nil {
 		return fmt.Errorf("handshake: %w", err)
 	}
-	if welcome.Type != "welcome" || welcome.Version != protocol.WireVersion {
+	if welcome.Type != "welcome" || welcome.Version != protocol.WireVersion || (welcome.Component != "" && welcome.Component != "hub") {
 		return errors.New("incompatible hub protocol")
 	}
-	log.Printf("device %s connected", info.ID)
+	log.Printf("device %s connected; hub_version=%q wire_version=%d", info.ID, welcome.BuildVersion, welcome.Version)
 	connectionCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	go func() {

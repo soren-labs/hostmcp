@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-const Version = "0.2.1"
+var Version = "0.2.2-dev"
+
 const WireVersion = 1
 const MaxMessageBytes = 4 << 20
 
@@ -38,30 +39,36 @@ func JSONResult(value any) Result {
 }
 
 type Device struct {
-	ID           string    `json:"id"`
-	Hostname     string    `json:"hostname"`
-	OS           string    `json:"os"`
-	Arch         string    `json:"arch"`
-	Username     string    `json:"username"`
-	UID          string    `json:"uid"`
-	EUID         string    `json:"euid,omitempty"`
-	ExpectedUser string    `json:"expected_user,omitempty"`
-	Home         string    `json:"home"`
-	Version      string    `json:"version"`
-	Online       bool      `json:"online"`
-	ConnectedAt  time.Time `json:"connected_at,omitzero"`
+	Component      string    `json:"component,omitempty"`
+	WireVersion    int       `json:"wire_version,omitempty"`
+	LastSeen       time.Time `json:"last_seen,omitzero"`
+	DisconnectedAt time.Time `json:"disconnected_at,omitzero"`
+	ID             string    `json:"id"`
+	Hostname       string    `json:"hostname"`
+	OS             string    `json:"os"`
+	Arch           string    `json:"arch"`
+	Username       string    `json:"username"`
+	UID            string    `json:"uid"`
+	EUID           string    `json:"euid,omitempty"`
+	ExpectedUser   string    `json:"expected_user,omitempty"`
+	Home           string    `json:"home"`
+	Version        string    `json:"version"`
+	Online         bool      `json:"online"`
+	ConnectedAt    time.Time `json:"connected_at,omitzero"`
 }
 
 type Message struct {
-	Type      string          `json:"type"`
-	Version   int             `json:"version,omitempty"`
-	ID        string          `json:"id,omitempty"`
-	Principal string          `json:"principal,omitempty"`
-	Tool      string          `json:"tool,omitempty"`
-	Args      json.RawMessage `json:"args,omitempty"`
-	Device    *Device         `json:"device,omitempty"`
-	Result    *Result         `json:"result,omitempty"`
-	Error     string          `json:"error,omitempty"`
+	Component    string          `json:"component,omitempty"`
+	BuildVersion string          `json:"build_version,omitempty"`
+	Type         string          `json:"type"`
+	Version      int             `json:"version,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Principal    string          `json:"principal,omitempty"`
+	Tool         string          `json:"tool,omitempty"`
+	Args         json.RawMessage `json:"args,omitempty"`
+	Device       *Device         `json:"device,omitempty"`
+	Result       *Result         `json:"result,omitempty"`
+	Error        string          `json:"error,omitempty"`
 }
 
 type Executor interface {

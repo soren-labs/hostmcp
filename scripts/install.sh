@@ -4,10 +4,11 @@ set -eu
 
 usage() {
   cat <<'EOF'
-Usage: sh install.sh --version v0.2.1 [--prefix DIR] [--repository OWNER/REPO]
+Usage: sh install.sh --version v0.2.1 [--role all|hub|agent] [--prefix DIR] [--repository OWNER/REPO]
        sh install.sh --version v0.2.1 --archive PATH --checksums PATH [--prefix DIR]
 
-Downloads the requested GitHub release, verifies SHA-256, and installs hostmcp.
+Downloads the requested GitHub release, verifies SHA-256, and installs the selected
+component (default all: the original hostmcp compatibility binary).
 Default destination: $HOME/.local/bin. No privilege escalation or service changes.
 The local archive mode also verifies the matching entry in SHA256SUMS.
 EOF
@@ -19,10 +20,12 @@ need_value() { [ "$#" -ge 2 ] && [ -n "$2" ] || fail "missing value for $1"; }
 version=''
 prefix="${HOME:?HOME must be set}/.local/bin"
 repository='soren-labs/hostmcp'
+role=all
 local_archive=''
 local_checksums=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --role) need_value "$@"; role="$2"; shift 2 ;;
     --version) need_value "$@"; version="$2"; shift 2 ;;
     --prefix) need_value "$@"; prefix="$2"; shift 2 ;;
     --repository) need_value "$@"; repository="$2"; shift 2 ;;
@@ -47,7 +50,12 @@ case "$(uname -m)" in
   arm64|aarch64) target_arch=arm64 ;;
   *) fail 'supported architectures are amd64 and arm64' ;;
 esac
-asset="hostmcp_${version}_${target_os}_${target_arch}.tar.gz"
+case "$role" in
+  all) binary=hostmcp ;;
+  hub|agent) binary="hostmcp-$role" ;;
+  *) fail 'role must be all, hub or agent' ;;
+esac
+asset="${binary}_${version}_${target_os}_${target_arch}.tar.gz"
 
 for executable in tar awk mktemp; do
   command -v "$executable" >/dev/null 2>&1 || fail "required command is missing: $executable"
@@ -94,12 +102,12 @@ expected=$(printf '%s' "$expected" | tr 'ABCDEF' 'abcdef')
 [ "$actual" = "$expected" ] || fail 'SHA-256 mismatch; nothing was installed'
 
 mkdir "$temp_dir/extract"
-tar -xzf "$temp_dir/$asset" -C "$temp_dir/extract" hostmcp
-[ -f "$temp_dir/extract/hostmcp" ] && [ ! -L "$temp_dir/extract/hostmcp" ] || fail 'archive does not contain a regular hostmcp binary'
+tar -xzf "$temp_dir/$asset" -C "$temp_dir/extract" "$binary"
+[ -f "$temp_dir/extract/$binary" ] && [ ! -L "$temp_dir/extract/$binary" ] || fail 'archive does not contain a regular hostmcp binary'
 mkdir -p "$prefix"
 staged_binary=$(mktemp "$prefix/.hostmcp.XXXXXX")
-cp "$temp_dir/extract/hostmcp" "$staged_binary"
+cp "$temp_dir/extract/$binary" "$staged_binary"
 chmod 0755 "$staged_binary"
-mv -f "$staged_binary" "$prefix/hostmcp"
+mv -f "$staged_binary" "$prefix/$binary"
 staged_binary=''
-printf '%s\n' "Installed HostMCP $version to $prefix/hostmcp" "Add $prefix to PATH if needed. Services were not started or changed."
+printf '%s\n' "Installed HostMCP $version to $prefix/$binary" "Add $prefix to PATH if needed. Services were not started or changed."
