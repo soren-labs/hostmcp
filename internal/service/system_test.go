@@ -151,3 +151,59 @@ func TestLookupRootAccount(t *testing.T) {
 		t.Fatalf("invalid native root account: %+v", a)
 	}
 }
+
+func TestAccountAccessPreservesCurrentCredentials(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "private")
+	if err := os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	a := account{name: "current", uid: uint32(os.Geteuid()), gid: uint32(os.Getegid())}
+	// Directory services can report more memberships than Darwin setgroups
+	// accepts. No group mutation is needed when checking the current identity.
+	for n := 0; n < 64; n++ {
+		a.groups = append(a.groups, uint32(n))
+	}
+	if err := checkAccountAccess(a, "-r", file); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkAccountAccess(a, "-r", filepath.Join(dir, "missing")); err == nil {
+		t.Fatal("missing file was reported readable")
+	}
+}
+
+func TestDarwinRootChecksTargetAccountPermissions(t *testing.T) {
+	if runtime.GOOS != "darwin" || os.Geteuid() != 0 || os.Getenv("SUDO_USER") == "" || os.Getenv("SUDO_USER") == "root" {
+		t.Skip("requires a macOS administrator running this fixture with sudo")
+	}
+	a, err := lookupAccount(os.Getenv("SUDO_USER"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// t.TempDir nests under a root-only test parent, which would hide the
+	// account-owned fixture before the intended file permission check.
+	dir, err := os.MkdirTemp("/private/tmp", "hostmcp-account-access-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err = os.Chmod(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "account-private")
+	if err = os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chown(file, int(a.uid), int(a.gid)); err != nil {
+		t.Fatal(err)
+	}
+	if err = checkAccountAccess(a, "-r", file); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chown(file, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err = checkAccountAccess(a, "-r", file); err == nil {
+		t.Fatal("target user inherited root's access to a root-only file")
+	}
+}

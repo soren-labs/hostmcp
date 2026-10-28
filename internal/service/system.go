@@ -18,7 +18,8 @@ import (
 
 // Options selects a native service manager. A system service can run as any
 // existing OS account. Installing it requires an already elevated process;
-// HostMCP never invokes sudo or grants that account additional privileges.
+// HostMCP never elevates the installing process or grants the service account
+// additional privileges.
 type Options struct {
 	System bool
 	User   string
@@ -187,9 +188,18 @@ func renderSystem(goos, name, role, binary, configPath string, a account) (strin
 
 func checkAccountAccess(a account, operation, path string) error {
 	cmd := exec.Command("/bin/test", operation, path)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: a.uid, Gid: a.gid, Groups: a.groups}}
+	if a.uid != uint32(os.Geteuid()) || a.gid != uint32(os.Getegid()) {
+		if runtime.GOOS == "darwin" {
+			// Darwin directory-service memberships can exceed setgroups(2)'s
+			// fixed-size list. Its native account helper initializes those groups
+			// correctly. The installer is already root; this only drops authority.
+			cmd = exec.Command("/usr/bin/sudo", "-n", "-u", "#"+strconv.FormatUint(uint64(a.uid), 10), "--", "/bin/test", operation, path)
+		} else {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: a.uid, Gid: a.gid, Groups: a.groups}}
+		}
+	}
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("service user %s cannot access %s (%s); check ownership and parent directory permissions", a.name, path, operation)
+		return fmt.Errorf("service user %s cannot access %s (%s); check ownership and parent directory permissions: %w", a.name, path, operation, err)
 	}
 	return nil
 }
