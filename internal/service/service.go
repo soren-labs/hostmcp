@@ -1,4 +1,4 @@
-// Package service installs native per-user background services.
+// Package service installs native user and system background services.
 package service
 
 import (
@@ -141,16 +141,27 @@ func run(name string, args ...string) error {
 }
 
 func startSystemd(name string, run commandRun, query commandQuery) error {
-	if err := run("systemctl", "--user", "daemon-reload"); err != nil {
+	return startSystemdScoped(name, false, run, query)
+}
+
+func systemdArgs(system bool, args ...string) []string {
+	if system {
+		return args
+	}
+	return append([]string{"--user"}, args...)
+}
+
+func startSystemdScoped(name string, system bool, run commandRun, query commandQuery) error {
+	if err := run("systemctl", systemdArgs(system, "daemon-reload")...); err != nil {
 		return err
 	}
-	if err := run("systemctl", "--user", "enable", "--now", name+".service"); err != nil {
+	if err := run("systemctl", systemdArgs(system, "enable", "--now", name+".service")...); err != nil {
 		return err
 	}
 	// Type=exec waits for chdir/exec failures. Give immediate configuration or bind
 	// failures a chance to settle before checking the actual manager state too.
 	time.Sleep(150 * time.Millisecond)
-	out, err := query("systemctl", "--user", "show", "--no-pager", "--property=LoadState,ActiveState,SubState,Result", name+".service")
+	out, err := query("systemctl", systemdArgs(system, "show", "--no-pager", "--property=LoadState,ActiveState,SubState,Result", name+".service")...)
 	if err != nil {
 		return fmt.Errorf("cannot verify service startup: %w", err)
 	}
@@ -162,7 +173,11 @@ func startSystemd(name string, run commandRun, query commandQuery) error {
 		}
 	}
 	if state["LoadState"] != "loaded" || state["ActiveState"] != "active" || state["SubState"] != "running" {
-		return fmt.Errorf("service did not start (load=%s, active=%s, sub=%s, result=%s); inspect journalctl --user -u %s.service", state["LoadState"], state["ActiveState"], state["SubState"], state["Result"], name)
+		scope := "--user "
+		if system {
+			scope = ""
+		}
+		return fmt.Errorf("service did not start (load=%s, active=%s, sub=%s, result=%s); inspect journalctl %s-u %s.service", state["LoadState"], state["ActiveState"], state["SubState"], state["Result"], scope, name)
 	}
 	return nil
 }
@@ -277,6 +292,9 @@ func Uninstall(name string) error {
 		return err
 	}
 	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
