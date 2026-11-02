@@ -4,6 +4,10 @@
 的部署方式。Each record covers only what was actually run on the stated
 platforms; it is not a claim about later versions or untested deployments.
 
+旧记录中的 `verify-source-import.py` 检查针对已经移除的上游参考快照；该快照和
+脚本自 v0.2.4 起不再包含在仓库中。The `verify-source-import.py` check in older
+records covered an upstream reference snapshot that was removed after v0.2.3.
+
 | 版本 | 记录 | 范围 |
 | --- | --- | --- |
 | v0.2.3 | [Cloudflare Access validation](v0.2.3-cloudflare-access.md) | macOS 本地源码验证；签名 JWT 与官方 MCP SDK 集成测试。未测试真实 ChatGPT / Cloudflare Access 登录 |

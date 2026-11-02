@@ -1,17 +1,16 @@
 # Contributing to HostMCP
 
 HostMCP provides native Linux/macOS user capabilities through MCP. Read AGENTS.md
-before changing the runtime. The upstream reference tree is immutable evidence,
-not the active implementation.
+before changing the runtime.
 
 ## Development
 
-Use Go 1.25 or a newer compatible toolchain, Python 3 for the source and smoke
+Use Go 1.25 or a newer compatible toolchain, Python 3 for the smoke and packaging
 checks, and [golangci-lint](https://golangci-lint.run/welcome/install/) v2.
 The runtime is built from `cmd/hostmcp` and the `internal/` packages.
 
 ```sh
-make check    # source snapshot, gofmt, vet, golangci-lint, race tests, stdio smoke test
+make check    # gofmt, vet, golangci-lint, race tests, stdio smoke test
 make build    # ./build/hostmcp
 make vuln     # govulncheck
 ```
@@ -20,8 +19,8 @@ make vuln     # govulncheck
 `Makefile` if you prefer to run them directly.
 
 Use isolated temporary directories, test-only credentials, and dedicated Hub/Agent
-processes. Never connect tests to an existing Chat On Steroids installation or read
-its user data. Keep production configuration, real tokens and device details out of
+processes. Never connect tests to a production Hub or read real user
+data. Keep production configuration, real tokens and device details out of
 fixtures and logs.
 
 ## Pull requests
@@ -77,13 +76,12 @@ HOSTMCP_SCALE_BINARY=/absolute/path/hostmcp \
   prove macOS runtime behavior, and a checked-in workflow is not evidence of a CI run.
 - Record reproducible results and limitations under docs/validation/, without secrets.
 
-## Reference source
+## Third-party code
 
-Do not edit reference/chat-on-steroids/, provenance hashes, upstream notices, or
-the existing source-baseline workflow to make a check pass. Adapt ideas into the
-new runtime. Preserve any applicable copyright/license attribution when porting
-source. The historical extraction plan records the earlier design; current choices
-belong in docs/architecture.md.
+Write new code rather than copying it. If you must include code from another
+project, keep its copyright and license notices, check that its license is
+compatible with MIT, and say so in the pull request. Design decisions belong in
+docs/architecture.md.
 
 ## Releasing
 
@@ -108,7 +106,7 @@ bash scripts/release.sh v0.2.3
 ```
 
 Archive names are hostmcp_VERSION_OS_ARCH.tar.gz for linux/darwin and amd64/arm64.
-Each contains the binary, LICENSE, NOTICE and dependency license notices. The
+Each contains the binary, LICENSE and dependency license notices. The
 installer verifies the selected archive checksum and writes to a user-owned prefix.
 It can be tested without a network download:
 

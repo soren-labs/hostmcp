@@ -19,14 +19,14 @@ tools act with that account's ordinary privileges.
 | `internal/oauth`, `internal/cloudflareaccess` | JWT access-token and Access-assertion verifiers. |
 | `internal/service` | systemd and launchd user/system service installers. |
 | `internal/update` | Opt-in, checksum-pinned Agent updater. |
-| `scripts/` | Smoke tests, packaging, installer, source verification. |
+| `scripts/` | Smoke tests, packaging, installer and release helpers. |
 | `docs/` | User documentation. `docs/validation/` holds test evidence. |
-| `reference/chat-on-steroids/` | Immutable upstream snapshot. Not built or imported. |
+| `deploy/` | Docker, Caddy, Cloudflare Tunnel and hand-written service examples. |
 
 ## Commands
 
 ```sh
-make check        # verify source snapshot, gofmt, vet, lint, race tests, stdio smoke test
+make check        # gofmt, vet, lint, race tests, stdio smoke test
 make build        # ./build/hostmcp
 ```
 
@@ -35,9 +35,6 @@ commands are listed in `Makefile` and `CONTRIBUTING.md`.
 
 ## Rules
 
-- Treat `reference/chat-on-steroids/` and `provenance/upstream.json` as immutable
-  upstream evidence. Preserve upstream copyright headers and the MIT/Apache
-  attribution in `LICENSE`, `NOTICE` and `ATTRIBUTION.md`.
 - Use real OS paths. Do not add approved-folder policies, command allowlists or
   browser conversation identity in front of ordinary file and process operations.
 - Full user authority does not mean automatic root elevation or bypassing macOS
@@ -51,8 +48,7 @@ commands are listed in `Makefile` and `CONTRIBUTING.md`.
 - Target standard MCP clients over stdio and Streamable HTTP. No Electron,
   renderer, tray, browser extension, ChatGPT DOM automation, model API or GUI.
 - Tests use isolated temporary directories and test-only credentials. Never
-  connect tests to a running Chat On Steroids installation, a real Hub, or real
-  user data.
+  connect tests to a real Hub, real credentials or real user data.
 - Only claim a platform, deployment or client as tested when it was actually
   tested. Record evidence under `docs/validation/` without secrets.
 - Add user-visible changes to the `Unreleased` section of `CHANGELOG.md`.

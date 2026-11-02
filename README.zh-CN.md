@@ -220,10 +220,7 @@ HostMCP 尚未到 1.0：面向单个所有者或单个信任域，minor 版本�
 欢迎提交问题、改进文档和 Pull Request。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；
 `make check` 会运行与 CI 相同的检查。参与项目需遵守[行为准则](CODE_OF_CONDUCT.md)。
 
-## 许可证与来源
+## 许可证
 
-HostMCP 以 [MIT License](LICENSE) 发布。Go 运行时是独立实现。仓库在 `reference/`
-下保留了 [Chat On Steroids](https://github.com/totec448-spec/chat-on-steroids)
-v2.1.11 部分文件的原样快照，作为设计来源证据；其中部分文件派生自 OpenAI Codex，
-保留其 Apache-2.0 声明。详见 [NOTICE](NOTICE) 和 [ATTRIBUTION.md](ATTRIBUTION.md)。
-HostMCP 与这两个项目无隶属关系，也未获得其背书。
+HostMCP 以 [MIT License](LICENSE) 发布。发布归档和容器镜像附带了构建所用 Go 模块的
+许可证声明。

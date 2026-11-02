@@ -16,4 +16,3 @@
 - [ ] Documentation is updated where behavior or setup changes
 - [ ] No tokens, invitations, real configuration or private host names in code, tests, logs or docs
 - [ ] Wire version 1 compatibility is preserved, or the change is called out (see `docs/components-updates.md`)
-- [ ] `reference/chat-on-steroids/` and `provenance/` are unchanged

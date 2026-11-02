@@ -10,16 +10,23 @@ are generated from the matching section of this file.
 ### Repository
 
 - English README with a separate Chinese README; validation records moved under
-  `docs/validation/` and the historical extraction plan under `docs/history/`.
+  `docs/validation/`.
 - Community files: security policy, code of conduct, issue and pull request
   templates, Dependabot, and a CODEOWNERS file.
 - CI adds golangci-lint and govulncheck. Release notes come from this changelog.
-- GitHub language statistics exclude the immutable `reference/` snapshot.
-- The root license adds HostMCP's own copyright line; the upstream MIT notice is
-  unchanged and still verified by `scripts/verify-source-import.py`.
 - Unstamped source builds report `0.2.4-dev`. The Hub container build uses the
   source version unless `VERSION` is supplied, instead of a stale default.
 - The deployment guide notes that the Hub image needs BuildKit (`docker buildx`).
+
+### Removed
+
+- The Chat On Steroids reference snapshot (`reference/`), its provenance manifest
+  and import/verification scripts, the source-baseline workflow, `NOTICE`,
+  `ATTRIBUTION.md` and the historical extraction plan. The Go runtime never
+  imported or built any of them.
+- Release archives and the container image no longer ship `NOTICE` or the
+  upstream Codex license. `LICENSE` now names only the HostMCP contributors.
+  Dependency license notices are still bundled.
 
 ### Fixed
 
