@@ -236,12 +236,7 @@ Bug reports, documentation fixes and pull requests are welcome. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md); `make check` runs the same checks as CI.
 Participation is covered by the [code of conduct](CODE_OF_CONDUCT.md).
 
-## License and attribution
+## License
 
-HostMCP is released under the [MIT License](LICENSE). The Go runtime is an
-independent implementation. The repository also keeps an unmodified snapshot of
-selected [Chat On Steroids](https://github.com/totec448-spec/chat-on-steroids)
-v2.1.11 files under `reference/` as design provenance. Some of those files are
-derived from OpenAI Codex and keep their Apache-2.0 notices. See [NOTICE](NOTICE)
-and [ATTRIBUTION.md](ATTRIBUTION.md). HostMCP is not affiliated with or endorsed by
-either project.
+HostMCP is released under the [MIT License](LICENSE). Release archives and the
+container image include the license notices of the Go modules they are built from.

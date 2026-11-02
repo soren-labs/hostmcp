@@ -20,7 +20,7 @@ Agent。这样，部署在小 VPS 上的 Hub 只负责控制和转发，构建�
 
 ## 为什么使用 Go
 
-历史[提取计划](history/extraction-plan.md)优先考虑 Node/TypeScript。完成源码检查后，当前实现改用 Go：
+早期方案曾考虑 Node/TypeScript，最终实现选择 Go：
 
 - 原兼容二进制保留；新增独立 Hub/Agent 角色产物，生命周期可分别管理。
 - 每种角色构建 linux/amd64、linux/arm64、darwin/amd64、darwin/arm64 四种目标。

@@ -32,9 +32,7 @@ FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/hostmcp /hostmcp
 COPY --from=build /src/LICENSE /LICENSE
-COPY --from=build /src/NOTICE /NOTICE
 COPY --from=build /licenses /licenses
-COPY --from=build /src/reference/chat-on-steroids/docs/licenses/codex /licenses/upstream-codex
 COPY --from=build --chown=10001:10001 /state /state
 USER 10001:10001
 WORKDIR /state

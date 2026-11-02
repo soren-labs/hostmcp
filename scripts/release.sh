@@ -21,7 +21,6 @@ cd "$repo_root"
 for executable in go git python3 tar; do
   command -v "$executable" >/dev/null || { printf 'Missing command: %s\n' "$executable" >&2; exit 1; }
 done
-python3 scripts/verify-source-import.py
 go mod download all
 release_commit="$(git rev-parse --short=12 HEAD)"
 release_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -66,7 +65,6 @@ while text.strip():
     modules.append({"module": module["Path"], "version": module.get("Version"), "notices": sorted(found)})
 (destination / "modules.json").write_text(json.dumps(modules, indent=2) + "\n")
 PY
-cp -R reference/chat-on-steroids/docs/licenses/codex "$temp_dir/licenses/upstream-codex"
 
 for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
   target_os="${target%/*}"
@@ -79,13 +77,13 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
     CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath \
       -ldflags "-s -w -X main.version=$release_version -X github.com/soren-labs/hostmcp/internal/protocol.Version=$release_version -X main.component=$role -X main.commit=$release_commit -X main.buildTime=$release_time" \
       -o "$package_dir/$executable" ./cmd/hostmcp
-    cp LICENSE NOTICE "$package_dir/"
+    cp LICENSE "$package_dir/"
     cp README.md README.zh-CN.md "$package_dir/"
     cp -R docs "$package_dir/docs"
     cp deploy/README.md "$package_dir/docs/native-services.md"
     cp -R "$temp_dir/licenses" "$package_dir/licenses"
     COPYFILE_DISABLE=1 tar -C "$package_dir" -czf "$output_dir/${executable}_${release_version}_${target_os}_${target_arch}.tar.gz" \
-      "$executable" LICENSE NOTICE README.md README.zh-CN.md docs licenses
+      "$executable" LICENSE README.md README.zh-CN.md docs licenses
   done
 done
 

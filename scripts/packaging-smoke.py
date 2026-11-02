@@ -35,7 +35,7 @@ def main():
         assert hashlib.sha256((dist / name).read_bytes()).hexdigest() == checksum
         with tarfile.open(dist / name) as archive:
             names = archive.getnames()
-            assert "NOTICE" in names and "LICENSE" in names and "licenses" in names
+            assert "LICENSE" in names and "licenses" in names
     with tempfile.TemporaryDirectory(prefix="hostmcp-packaging-") as tmp:
         folder = Path(tmp).resolve()
         prefix = folder / "bin"

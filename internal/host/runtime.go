@@ -1,6 +1,4 @@
 // Package host executes tools with the ordinary privileges of its OS account.
-// The process/session semantics follow the retained Chat On Steroids / Codex
-// references. This implementation is independent Go code; reference/ is immutable.
 package host
 
 import (

@@ -40,12 +40,7 @@ linters:
         linters:
           - staticcheck
         text: "SA1019: \\(crypto/elliptic.Curve\\).IsOnCurve"
-    paths:
-      - reference/
 
 formatters:
   enable:
     - gofmt
-  exclusions:
-    paths:
-      - reference/

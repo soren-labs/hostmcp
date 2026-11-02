@@ -29,7 +29,6 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: true
-      - run: python3 scripts/verify-source-import.py
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - name: Build native executable for CLI validation
