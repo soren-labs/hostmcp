@@ -197,7 +197,7 @@ OAuth JWT access token issuer。此功能仅改 Hub，真实 ChatGPT 登录仍�
 
 | 接入 | 当前声明 |
 | --- | --- |
-| 官方 MCP SDK 与 HostMCP 内置 call | 以 validation.md 的实际测试结果为准 |
+| 官方 MCP SDK 与 HostMCP 内置 call | 以[验证记录](validation/README.md)的实际测试结果为准 |
 | 通用 stdio 客户端 | 已提供配置方式；具体宿主验证另行记录 |
 | 自定义 bearer 的 remote MCP 客户端 | 协议目标；实际宿主和版本须分别验证 |
 | Claude Code 2.1.292 / Opus 5.5 | 2026-10-28 实测：独立 root 节点 token，经 stdio bridge 与 EC2 HTTPS Hub，三次真实工具调用成功；`id -u` 输出 0 |

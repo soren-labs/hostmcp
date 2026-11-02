@@ -1,241 +1,247 @@
 # HostMCP
 
-**一个 MCP 入口，连接你自己的 Linux 和 Mac。**
+[![CI](https://github.com/soren-labs/hostmcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/soren-labs/hostmcp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/soren-labs/hostmcp)](https://github.com/soren-labs/hostmcp/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/soren-labs/hostmcp)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-HostMCP 将多台设备的原生文件、Shell 和进程能力提供给 MCP 客户端。Hub 可以放在
-VPS，也可以放在家庭 Ubuntu 或 Mac 上；每台设备主动连入 Hub。家庭网络没有公网
-IP 时，可用 Cloudflare Tunnel 发布 Hub。
+**One MCP endpoint for all of your Linux and macOS machines.**
 
-运行时采用 Go 原生可执行文件，不依赖 Electron、浏览器扩展、Node.js 或模型 API。
-设备 Agent 以启动它的系统用户身份执行操作，使用真实系统路径。它不会额外创建
-逐目录批准流程，也不会自动获得 root 或绕过 macOS 隐私授权。
+[简体中文](README.zh-CN.md)
 
-## 版本与范围
+HostMCP is a self-hosted [Model Context Protocol](https://modelcontextprotocol.io/)
+server that lets AI agents such as Claude Code, Codex and ChatGPT run commands and
+edit files on your own machines. A small Go **Hub** authenticates MCP clients and
+routes each tool call to a native **Agent** on the chosen machine. Agents connect
+out to the Hub, so your laptop, home server or VPS needs no public IP or open port.
 
-当前源码是 **v0.2.3-dev（尚未发布）**，基于 v0.2.2：支持 Linux 与 macOS 的
-多设备、系统账户级 MCP 执行服务，并新增可选的 Hub Cloudflare Access JWT 验证。
-[Releases](https://github.com/soren-labs/hostmcp/releases) 提供 Linux/macOS 的
-amd64 与 arm64 可执行文件及 SHA-256 校验和。[验证记录](docs/validation.md)
-记录五台真实机器上的六个常驻账户节点、临时 Modal 节点、真实 Agent 客户端、
-低配 EC2 部署及 200 个模拟节点的验证范围。
+Each Agent acts as the OS account that runs it: real paths, your shell and
+environment, normal Unix permissions. No containers, no directory allowlists,
+no Node.js or Electron on the devices.
 
-项目针对个人或单个信任域的自部署实例，保留静态 bearer、原生 Agent、本地
-stdio 与远程 Streamable HTTP。v0.2.2 包含可选外部 OAuth 2.1 资源服务器、独立
-Hub/Agent 角色产物与本地固定版本 Agent 更新器。**v0.2.3 新增（尚未发布）**：
-[Cloudflare Access Managed OAuth 后端 JWT 验证](docs/cloudflare-access.md)。现有配置、
-节点凭证和 wire v1 保持有效；OAuth 身份必须显式授予节点，不继承 owner 权限。
-Access 身份按已验证的 email 显式映射节点；Agent、设备凭证和 wire 协议不变。
-见 [OAuth 配置](docs/oauth.md)、[组件兼容与更新](docs/components-updates.md)。
-多租户 SaaS、桌面键鼠、截图、Windows 和浏览器自动化不在当前范围。
-各客户端的实测状态见 [客户端接入](docs/clients.md)，已有 v0.2.1 验证不代表新增
-OAuth、Access 登录或更新器已在那些线上环境验收。真实 ChatGPT 经 Cloudflare
-Access 的 OAuth 登录仍未验收；本次仅使用隔离的签名 JWT 与官方 MCP SDK 测试。
+## Features
 
-## 工作方式
+- **Multi-device**: one Hub, many machines. Put the Hub on a VPS, or on a home
+  machine published through Cloudflare Tunnel.
+- **Per-account nodes**: a node is one machine plus one OS account. Run
+  `build-box-worker` and `build-box-root` side by side and grant each AI client
+  only the nodes it needs.
+- **Native tools**: shell commands with PTY support, managed long-running
+  processes, file read/write, Codex-style `apply_patch`, and image viewing.
+- **Standard MCP**: Streamable HTTP for remote clients, stdio for local use, and a
+  stdio bridge (`hostmcp connect`) for clients that only launch local commands.
+  Built on the official MCP Go SDK.
+- **Client authentication**: per-client bearer tokens, an external OAuth 2.1
+  resource server, or Cloudflare Access Managed OAuth assertions.
+- **Small footprint**: a single static binary for Linux and macOS (amd64, arm64).
+  The Hub measured 12–16 MiB RSS on a 412 MiB VPS with three devices connected
+  ([measurement](docs/validation/README.md)).
+- **Service install**: generates systemd and launchd user or system services.
+
+## How it works
 
 ```mermaid
-flowchart TD
-    C["MCP 客户端"] -->|"HTTPS /mcp"| E["Cloudflare Tunnel 或 HTTPS 反向代理"]
-    E --> H["HostMCP Hub"]
-    U["Ubuntu Agent"] -->|"主动连接"| H
-    M["Mac Agent"] -->|"主动连接"| H
-    V["VPS Agent"] -->|"主动连接"| H
-    U --> UP["Ubuntu 用户的文件与进程"]
-    M --> MP["Mac 用户的文件与进程"]
-    V --> VP["VPS 用户的文件与进程"]
+flowchart LR
+    C["MCP client<br/>Claude Code · Codex · ChatGPT"] -->|"HTTPS /mcp"| E["HTTPS proxy or<br/>Cloudflare Tunnel"]
+    E --> H["HostMCP Hub<br/>auth + routing"]
+    A1["Agent on Ubuntu<br/>(user dev)"] -->|"outbound WebSocket"| H
+    A2["Agent on Ubuntu<br/>(root)"] -->|"outbound WebSocket"| H
+    A3["Agent on Mac<br/>(user alice)"] -->|"outbound WebSocket"| H
 ```
 
-Hub 负责认证、设备路由和 MCP 协议，不执行设备命令。要管理 Hub 所在机器，也
-在该机器上运行一个独立 Agent。构建、测试和其他重任务发生在选定设备上；Hub
-不需要运行大模型。低配机器的实际占用以[验证记录](docs/validation.md)为准。
+The Hub never runs commands itself. To manage the Hub machine, run an Agent there
+too. Builds and other heavy work happen on the device you pick.
 
-**一个注册节点 = 一台机器上的一个系统账户。** 同一台 Ubuntu 可以注册
-`workstation-worker` 与 `workstation-root` 两个节点，分别以普通用户和 root
-运行；为 Codex、Claude Code 等客户端各发一枚只允许访问指定节点的 token。
-获得某节点意味着获得该账户的原生操作权限，项目不增加目录白名单或命令过滤。
-完整步骤见[账户节点与权限配置](docs/account-nodes.md)。
+## Tools
 
-## 安装
+| Tool | What it does |
+| --- | --- |
+| `list_devices` | Nodes visible to this client, with online state, OS user and UID (remote Hub only) |
+| `device_info` | OS account, UID/GID, groups, working directory and shell of a node |
+| `exec_command` | Run a shell command, optionally in a PTY; returns a session for long-running work |
+| `write_stdin` | Read more output from a session, send input or signals, resize a PTY |
+| `list_processes` / `terminate_process` | List and stop the caller's own sessions |
+| `read` | Read files (text line ranges or base64), list directories, show metadata |
+| `write_file` | Create or overwrite a file (text or base64) |
+| `apply_patch` | Apply a `*** Begin Patch` add/update/delete/move patch |
+| `view_image` | Return a PNG, JPEG or GIF file as MCP image content |
 
-使用预编译版本无需安装 Go。以下固定到 v0.2.2 基线；本次 v0.2.3 Access 功能
-需从源码构建或等待发布。下载安装脚本，然后指定版本：
+On a remote Hub every device tool takes a `device` argument with the node ID from
+`list_devices`. In local `stdio` mode the tools act on the current machine.
+
+## Install
+
+Pre-built binaries for Linux and macOS (amd64, arm64) are on the
+[releases page](https://github.com/soren-labs/hostmcp/releases). The installer
+picks the right archive, verifies its SHA-256 and installs to `~/.local/bin`:
 
 ```sh
-curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.2/scripts/install.sh \
-  -o hostmcp-install.sh
-sh hostmcp-install.sh --version v0.2.2
+curl -fsSLo hostmcp-install.sh \
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.3/scripts/install.sh
+sh hostmcp-install.sh --version v0.2.3
 export PATH="$HOME/.local/bin:$PATH"
 hostmcp version
 ```
 
-安装器检测 Linux/macOS 与 amd64/arm64，下载对应归档并校验 SHA-256，安装到
-**~/.local/bin**。发布脚本另外生成
-`hostmcp-hub` / `hostmcp-agent`；安装器用 `--role hub|agent` 选择，各自升级，
-原 `hostmcp` 产物和默认安装方式保留。服务配置在后续步骤完成。
+Use `--role hub` or `--role agent` to install the smaller single-role binaries
+(`hostmcp-hub`, `hostmcp-agent`). The default `hostmcp` binary contains every command.
 
-### 从源码构建
-
-需要 Go 1.25 或更新的兼容版本、Git；源码完整性检查需要 Python 3。
+To build from source you need Go 1.25 or newer:
 
 ```sh
 git clone https://github.com/soren-labs/hostmcp.git
 cd hostmcp
-python3 scripts/verify-source-import.py
-go build -trimpath -o ./build/hostmcp ./cmd/hostmcp
-./build/hostmcp version
+make build            # writes ./build/hostmcp
 ```
 
-将生成的可执行文件复制到每台设备，或分别从源码构建。可安装到用户目录：
+`go install github.com/soren-labs/hostmcp/cmd/hostmcp@latest` also works; such
+builds report a `-dev` version because release metadata is not stamped in.
+
+## Quick start: one machine
+
+No Hub is needed. Point your MCP client at `hostmcp stdio`; tools run as the user
+who starts the client.
 
 ```sh
-mkdir -p "$HOME/.local/bin"
-install -m 0755 ./build/hostmcp "$HOME/.local/bin/hostmcp"
-export PATH="$HOME/.local/bin:$PATH"
+# Claude Code
+claude mcp add --transport stdio hostmcp -- "$HOME/.local/bin/hostmcp" stdio
+# Codex CLI
+codex mcp add hostmcp -- "$HOME/.local/bin/hostmcp" stdio
 ```
 
-### 1. 初始化 Hub
+Clients that use an `mcpServers` JSON file:
 
-先确定对外地址，例如 **https://mcp.example.com**，再在 Hub 所在机器执行：
+```json
+{
+  "mcpServers": {
+    "hostmcp": { "command": "/absolute/path/to/hostmcp", "args": ["stdio"] }
+  }
+}
+```
+
+## Quick start: several machines
+
+The example uses `https://mcp.example.com` as the Hub's public HTTPS address. See
+[deployment](docs/deployment.md) for Cloudflare Tunnel, Caddy and Docker setups.
+
+**1. Create and start the Hub** (on the Hub machine):
 
 ```sh
-umask 077
-mkdir -p "$HOME/.config/hostmcp"
-chmod 700 "$HOME/.config/hostmcp"
-hostmcp hub init \
-  --config "$HOME/.config/hostmcp/hub.json" \
-  --listen 127.0.0.1:8787 \
-  --public-url https://mcp.example.com \
-  --client-token-file "$HOME/.config/hostmcp/owner.token"
-hostmcp hub serve --config "$HOME/.config/hostmcp/hub.json"
+hostmcp hub init --public-url https://mcp.example.com \
+  --client-token-file ~/.config/hostmcp/owner.token
+hostmcp hub serve           # listens on 127.0.0.1:8787; put HTTPS in front of it
 ```
 
-公开入口必须先指向该 Hub。选择[Cloudflare named Tunnel 或自有域名 HTTPS](docs/deployment.md)。
-本机临时测试可使用 http://127.0.0.1:8787；公网部署使用 HTTPS。
-
-### 2. 加入 Ubuntu、Mac 或其他 VPS
-
-在 Hub 机器上为每台设备生成单独邀请：
+**2. Invite a device** (on the Hub machine). `--user` binds the node to the OS
+account it must run as:
 
 ```sh
-hostmcp device invite \
-  --config "$HOME/.config/hostmcp/hub.json" \
-  --id ubuntu-dev --user dev \
-  --ttl 15m \
-  --output ./ubuntu-invite.json
+hostmcp device invite --id laptop --user alice --output laptop-invite.json
 ```
 
-通过你控制的文件传输方式把邀请文件送到该设备。在目标设备上，以希望 Agent
-使用的用户身份执行；该用户应与邀请中的 `--user` 一致：
+**3. Enroll and run the Agent** (on the device, as that user). Copy the invite
+file over a channel you trust; it is single-use and expires after 15 minutes:
 
 ```sh
-umask 077
-mkdir -p "$HOME/.config/hostmcp"
-hostmcp agent enroll \
-  --invite ./ubuntu-invite.json \
-  --config "$HOME/.config/hostmcp/agent.json"
-hostmcp agent run --config "$HOME/.config/hostmcp/agent.json"
+hostmcp agent enroll --invite laptop-invite.json
+hostmcp agent run
 ```
 
-邀请包含临时加入凭证，使用后删除本次邀请副本。为 Mac 重复这一过程，并将
-设备 ID 和 `--user` 改为对应的 Mac 节点与账户。每个账户节点使用自己的邀请和
-配置文件，设备只需访问 Hub，不要求开放入站端口。
-
-### 3. 验证并接入客户端
+**4. Connect a client.** Give each AI client its own token, scoped to the nodes it
+needs:
 
 ```sh
-hostmcp call \
-  --url https://mcp.example.com/mcp \
-  --token-file "$HOME/.config/hostmcp/owner.token" \
-  --tool list_devices --args '{}'
+# on the Hub machine
+hostmcp token create --id claude --devices laptop --output claude.token
 ```
-
-在 Hub 上为不同 Agent 分配独立 token，例如：
 
 ```sh
-hostmcp token create --config "$HOME/.config/hostmcp/hub.json" \
-  --id codex --devices ubuntu-dev,mac-dev \
-  --output "$HOME/.config/hostmcp/codex.token"
-hostmcp token create --config "$HOME/.config/hostmcp/hub.json" \
-  --id claude-admin --devices ubuntu-root \
-  --output "$HOME/.config/hostmcp/claude-admin.token"
+# on the client machine, with claude.token copied there (chmod 600)
+claude mcp add --transport stdio hostmcp -- \
+  "$HOME/.local/bin/hostmcp" connect \
+  --url https://mcp.example.com/mcp --token-file /absolute/path/claude.token
 ```
 
-节点 ID 应替换成实际注册的值。把对应 token 文件安全复制到运行该 Agent 的
-机器，保持 `0600` 权限；客户端配置使用文件路径，不把 token 正文写入仓库。
-
-支持 HTTP Authorization header 的 MCP 客户端可以直接连接。支持本地 stdio
-的客户端也可以通过桥接命令访问远程 Hub：
+Clients that support remote MCP with an `Authorization` header can use
+`https://mcp.example.com/mcp` directly. Check the setup from a shell:
 
 ```sh
-hostmcp connect \
-  --url https://mcp.example.com/mcp \
-  --token-file "$HOME/.config/hostmcp/owner.token"
+hostmcp call --url https://mcp.example.com/mcp \
+  --token-file /absolute/path/claude.token --tool list_devices
 ```
 
-单机使用不需要 Hub：把 **hostmcp stdio** 配为客户端的本地 MCP 命令即可。
-完整 JSON 配置、认证边界和兼容性说明见[客户端接入](docs/clients.md)。
-
-### 4. 作为常驻服务运行
+**5. Keep it running.** Install the Hub and each Agent as a service:
 
 ```sh
-hostmcp service install --role hub \
-  --config "$HOME/.config/hostmcp/hub.json" --name hostmcp-hub
+hostmcp service install --role hub   --config ~/.config/hostmcp/hub.json   --name hostmcp-hub
+hostmcp service install --role agent --config ~/.config/hostmcp/agent.json --name hostmcp-agent
 ```
 
-在各设备上使用 **--role agent** 和对应的 **agent.json**。默认安装用户级
-systemd 或 macOS LaunchAgent。需要开机启动的系统服务时，以管理员执行
-`service install --system --user ACCOUNT`，每个账户节点使用不同 `--name` 与
-配置文件。root 节点显式选择 `--user root`。登录、注销与开机行为见
-[部署文档](docs/deployment.md)。
-**hostmcp doctor** 用于查看当前系统和运行身份。
+User services are the default. For boot-time system services, root nodes and
+several accounts on one machine, see [account nodes](docs/account-nodes.md).
 
-## 文档
+## Security model
 
-| 文档 | 内容 |
-| --- | --- |
-| [架构](docs/architecture.md) | Hub/Agent 边界、Go 选型、权限与连接模型 |
-| [部署](docs/deployment.md) | 原生、Docker Hub、Cloudflare、自有域名、用户服务、卸载 |
-| [客户端](docs/clients.md) | 直连、stdio 桥、本地模式、兼容性范围 |
-| [账户节点](docs/account-nodes.md) | 同机普通用户/root、不同 Agent 凭证、原生权限验收 |
-| [安全模型](docs/security.md) | 认证、设备撤销、系统权限、信任边界 |
-| [验证记录](docs/validation.md) | 已执行证据、待执行项、资源测量与限制 |
-| [参与开发](CONTRIBUTING.md) | 构建、测试、发布与上游快照约束 |
+- **A token grants the full authority of the OS accounts behind its nodes.** An
+  authorized client can run anything and read or write anything that account can.
+  There is no directory or command allowlist by design. Give each client only the
+  nodes it needs, and use dedicated low-privilege accounts where that matters.
+- **Root is opt-in.** Agents never elevate. A root node is a separate Agent that an
+  administrator deliberately runs as root.
+- **Separate credentials** for clients, device invitations and device connections.
+  The Hub stores only SHA-256 hashes. Tokens can be scoped, rotated and revoked
+  without touching other clients or devices.
+- **The Hub only routes.** It authenticates, checks the client's node grants and
+  forwards the call. It has no command executor.
+- **OS protections still apply**: file permissions, sudo policy, SELinux/AppArmor,
+  and macOS TCC/SIP.
 
-## 源码来源
+Read the full [security model](docs/security.md) before exposing a Hub to the
+internet. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-最初提交保存了 Chat On Steroids v2.1.11 的 62 个参考文件，并未包含可运行的独立
-MCP 服务。**reference/** 保持原字节，**provenance/upstream.json** 记录哈希；
-新 Go 运行时独立实现，不把该快照当作已完成的移植。历史
-[提取计划](docs/extraction-plan.md)保留当时的 Node/TypeScript 候选设计；当前决策
-见[架构文档](docs/architecture.md)。
+## Status and limitations
 
-保留上游 MIT 和 Codex 派生部分 Apache-2.0 声明，详见 **LICENSE**、**NOTICE**
-及 **reference/chat-on-steroids/docs/licenses/codex/**。不读取、修改或接管正在
-运行的 Chat On Steroids 安装与用户数据。
+The latest release is [v0.2.3](https://github.com/soren-labs/hostmcp/releases/latest).
+HostMCP is pre-1.0: it serves one owner or one trust domain, and minor versions
+may change behavior. Each [validation record](docs/validation/README.md) lists
+exactly what was tested, on which machines and with which clients.
 
-## English
+Not supported today:
 
-HostMCP is a self-hosted MCP gateway for your Linux and macOS machines. A small Go
-Hub routes authenticated MCP requests to native device Agents connecting outward.
-Agents run as the OS account that starts them, with real filesystem paths and normal
-OS permissions. Deploy the Hub on a VPS or publish a home machine through a named
-Cloudflare Tunnel. No public IP is required on a device.
+- Windows, desktop control (mouse, keyboard, screenshots) and browser automation;
+- multi-tenant isolation between untrusted users of one Hub;
+- a built-in identity provider. OAuth uses your own provider or Cloudflare Access;
+- resuming process sessions after an Agent restart. Sessions survive network
+  reconnects, but not Agent restarts.
 
-HostMCP targets one trust domain, static bearer authentication, local stdio
-and remote Streamable HTTP. Each registered node represents one host/account pair:
-run separate named agents for an ordinary user and root, then grant each AI client
-its own node-scoped credential. No directory or command policy layer is added.
-System services and user services support Linux and macOS; Windows is out of scope.
-The v0.2.2 baseline includes optional [external OAuth authorization](docs/oauth.md),
-separate Hub/Agent artifacts and a [pinned opt-in updater](docs/components-updates.md).
-This **v0.2.3-dev (unreleased)** source adds optional Hub-only
-[Cloudflare Access Managed OAuth assertion validation](docs/cloudflare-access.md).
-Access handles opaque client OAuth tokens at the edge; the Hub verifies the signed
-assertion and maps emails to explicit device IDs. Existing bearer/OAuth modes remain
-independent. Real ChatGPT login through Cloudflare Access has not been tested.
-Wire-v1 Hub-only upgrades do not require Agent replacement for unchanged native
-operations. OAuth product compatibility and native platforms require their own
-acceptance tests. There is no built-in identity provider, universal client support,
-automatic root update or automatic privilege elevation. See the
-[validation record](docs/validation.md) for historical evidence and limitations.
+## Documentation
+
+| Topic | Document | Language |
+| --- | --- | --- |
+| Architecture and design decisions | [docs/architecture.md](docs/architecture.md) | 中文 |
+| Deployment: Cloudflare Tunnel, Caddy, Docker, services | [docs/deployment.md](docs/deployment.md) | 中文 |
+| Client setup: Claude Code, Codex, stdio bridge | [docs/clients.md](docs/clients.md) | 中文 |
+| Account nodes: ordinary user and root on one machine | [docs/account-nodes.md](docs/account-nodes.md) | 中文 |
+| Security model | [docs/security.md](docs/security.md) | 中文 |
+| External OAuth | [docs/oauth.md](docs/oauth.md) | English |
+| Cloudflare Access Managed OAuth | [docs/cloudflare-access.md](docs/cloudflare-access.md) | English |
+| Hub/Agent components, compatibility and updates | [docs/components-updates.md](docs/components-updates.md) | English |
+| Validation records | [docs/validation/](docs/validation/README.md) | 中文 / English |
+
+Translations of the Chinese documents are welcome.
+
+## Contributing
+
+Bug reports, documentation fixes and pull requests are welcome. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md); `make check` runs the same checks as CI.
+Participation is covered by the [code of conduct](CODE_OF_CONDUCT.md).
+
+## License and attribution
+
+HostMCP is released under the [MIT License](LICENSE). The Go runtime is an
+independent implementation. The repository also keeps an unmodified snapshot of
+selected [Chat On Steroids](https://github.com/totec448-spec/chat-on-steroids)
+v2.1.11 files under `reference/` as design provenance. Some of those files are
+derived from OpenAI Codex and keep their Apache-2.0 notices. See [NOTICE](NOTICE)
+and [ATTRIBUTION.md](ATTRIBUTION.md). HostMCP is not affiliated with or endorsed by
+either project.

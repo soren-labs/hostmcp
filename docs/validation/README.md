@@ -1,20 +1,27 @@
 # 验证记录
 
-## 当前版本：v0.2.1
+每份记录只描述当次实际执行的检查、平台和客户端，不代表之后的版本或没有测试过
+的部署方式。Each record covers only what was actually run on the stated
+platforms; it is not a claim about later versions or untested deployments.
 
-v0.2.1 的针对性回归测试记录见[修复验收](validation-v0.2.1.md)。该文档记录
-双 Agent 独立审查后确认的代码修改、Mac 原生 race/vet/stdio、Ubuntu 工作站
-真实 root/普通用户测试及 systemd 特殊字符服务启动测试。历史 v0.2.0 的
-五台机器、六个节点交付记录保留如下，不将历史证据冒充新版本的部署验收。
+| 版本 | 记录 | 范围 |
+| --- | --- | --- |
+| v0.2.3 | [Cloudflare Access validation](v0.2.3-cloudflare-access.md) | macOS 本地源码验证；签名 JWT 与官方 MCP SDK 集成测试。未测试真实 ChatGPT / Cloudflare Access 登录 |
+| v0.2.2 | [OAuth, component and updater validation](v0.2.2-oauth-updates.md) | macOS 本地；外部 OAuth 资源服务器、Hub/Agent 分离产物、离线固定版本更新器 |
+| v0.2.1 | [修复验收](v0.2.1.md) | 审查修复的回归测试；Mac 原生、Ubuntu 工作站 root 与普通用户、systemd 特殊字符路径 |
+| v0.2.0 | [交付验收](v0.2.0.md) | 五台真实机器上的六个账户节点、真实 Claude Code / Codex 调用、200 个模拟节点 |
+| v0.1.0 | [本页下方](#历史版本v010) | 三台设备经公网 HTTPS 的九工具验收、低配 VPS 资源测量 |
 
-## 历史版本：v0.2.0
+机器可读的脱敏证据：[agent-clients-2026-10-28.json](agent-clients-2026-10-28.json)、
+[delivery-2026-10-28.json](delivery-2026-10-28.json)、
+[ec2-scale-2026-10-28.json](ec2-scale-2026-10-28.json)。
 
-**2026-10-28 UTC** 的[交付验收记录](validation-v0.2.0.md)覆盖五台真实机器上的
+## v0.2.0 交付验收摘要
+
+**2026-10-28 UTC** 的[交付验收记录](v0.2.0.md)覆盖五台真实机器上的
 六个常驻账户节点、EC2/Caddy HTTPS、同机 root 与普通账户、真实 Claude Code /
 Codex / 子代理调用、macOS LaunchDaemon、Linux systemd、三个临时 Modal 容器，
-以及低配 EC2 上的 200 个模拟节点路由与重连测试。
-
-公开机器可读证据位于 [validation/](validation/)。不同批次分别记录，未将模拟
+以及低配 EC2 上的 200 个模拟节点路由与重连测试。不同批次分别记录，未将模拟
 节点、历史测试或交叉编译当作新的物理机实测。
 
 ## 历史版本：v0.1.0
