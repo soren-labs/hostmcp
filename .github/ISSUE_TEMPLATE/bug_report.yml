@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in HostMCP does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Do not paste tokens, invitations, real configuration files or private host names.**
+        Suspected security problems go to [private vulnerability reporting](https://github.com/soren-labs/hostmcp/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal commands or MCP tool calls. Replace secrets and host names with placeholders.
+      placeholder: |
+        1. hostmcp hub init --config ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: hostmcp version
+      description: Output of `hostmcp version` (or `hostmcp-hub version` / `hostmcp-agent version`) on each affected machine.
+      render: json
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      multiple: true
+      options:
+        - Hub
+        - Agent
+        - stdio (local mode)
+        - connect bridge / call CLI
+        - service install (systemd / launchd)
+        - installer / updater / release archives
+        - Docker Hub image
+        - Documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Client authentication
+      options:
+        - Bearer token
+        - External OAuth
+        - Cloudflare Access
+        - Not applicable (stdio)
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+      placeholder: e.g. Claude Code 2.1.292, Codex CLI 0.162.1, ChatGPT
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Redacted `hostmcp doctor` output and relevant logs
+      description: Remove usernames, paths and host names you do not want to share.
+      render: text
