@@ -1,6 +1,32 @@
 # Changelog
 
-## v0.2.3 — Unreleased
+All notable changes to HostMCP are recorded here. Versions follow
+[Semantic Versioning](https://semver.org/); before 1.0, minor versions may
+include breaking changes and are called out explicitly. Release notes on GitHub
+are generated from the matching section of this file.
+
+## Unreleased
+
+### Repository
+
+- English README with a separate Chinese README; validation records moved under
+  `docs/validation/` and the historical extraction plan under `docs/history/`.
+- Community files: security policy, code of conduct, issue and pull request
+  templates, Dependabot, and a CODEOWNERS file.
+- CI adds golangci-lint and govulncheck. Release notes come from this changelog.
+- GitHub language statistics exclude the immutable `reference/` snapshot.
+- The root license adds HostMCP's own copyright line; the upstream MIT notice is
+  unchanged and still verified by `scripts/verify-source-import.py`.
+- Unstamped source builds report `0.2.4-dev`. The Hub container build uses the
+  source version unless `VERSION` is supplied, instead of a stale default.
+- The deployment guide notes that the Hub image needs BuildKit (`docker buildx`).
+
+### Fixed
+
+- Updater tests no longer fail when the developer's umask is `002`, which is
+  common on Ubuntu. The updater itself still rejects group-writable directories.
+
+## v0.2.3 — 2026-10-28
 
 - Optional Hub-only Cloudflare Access Managed OAuth assertion authentication,
   separate from external OAuth JWT access tokens and static bearers. Validates
@@ -99,7 +125,7 @@ is introduced.
   avoiding invalid supplementary-group credentials during installation preflight.
 
 Deployment measurements and real agent-client evidence are recorded in
-[docs/validation.md](docs/validation.md). Process sessions survive a connection
+[docs/validation/](docs/validation/README.md). Process sessions survive a connection
 interruption while the node process remains alive; node-process restart recovery
 and durable exactly-once command execution are not part of this release.
 
@@ -139,5 +165,5 @@ bearer tokens. It does not implement OAuth login/refresh, untrusted tenant isola
 GUI control, or recovery of terminal sessions after a device Agent restarts.
 
 Actual deployment and client compatibility results are in
-[docs/validation.md](docs/validation.md). Configuration templates alone do not
+[docs/validation/](docs/validation/README.md). Configuration templates alone do not
 constitute evidence that every deployment option or client has been tested.

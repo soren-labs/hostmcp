@@ -1,0 +1,6 @@
+# Immutable upstream snapshot kept as provenance evidence; it is not part of the
+# Go runtime. Exclude it from GitHub language statistics.
+reference/** linguist-vendored
+
+# Machine-readable validation evidence.
+docs/validation/*.json linguist-generated

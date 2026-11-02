@@ -31,7 +31,7 @@ import (
 	"github.com/soren-labs/hostmcp/internal/service"
 )
 
-var version = "0.2.3-dev"
+var version = "0.2.4-dev"
 var component = "all"
 var commit = "development"
 var buildTime = "unknown"

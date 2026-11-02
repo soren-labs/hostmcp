@@ -10,6 +10,7 @@ import subprocess
 
 REPO = Path(__file__).resolve().parent.parent
 COMMIT = "f51acbccdd734f524799ea92bb747be765fba1e4"
+HOSTMCP_COPYRIGHT = b"Copyright (c) 2026 HostMCP contributors\n"
 
 
 def main():
@@ -54,8 +55,11 @@ def main():
     }
     if expected != actual:
         raise SystemExit(f"Reference inventory differs: {sorted(expected ^ actual)}")
-    if (REPO / "LICENSE").read_bytes() != (REPO / "reference/chat-on-steroids/LICENSE").read_bytes():
-        raise SystemExit("Root MIT license differs from upstream")
+    # The root license may add HostMCP's own copyright line; everything else,
+    # including the upstream copyright notice, must match the upstream file.
+    root_license = (REPO / "LICENSE").read_bytes().replace(HOSTMCP_COPYRIGHT, b"", 1)
+    if root_license != (REPO / "reference/chat-on-steroids/LICENSE").read_bytes():
+        raise SystemExit("Root MIT license must keep the upstream text unchanged")
     for path in expected:
         if any(part in {"renderer", "preload", "extension", "node_modules"} for part in Path(path).parts):
             raise SystemExit(f"Unexpected GUI or dependency tree: {path}")
