@@ -80,12 +80,12 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
       -ldflags "-s -w -X main.version=$release_version -X github.com/soren-labs/hostmcp/internal/protocol.Version=$release_version -X main.component=$role -X main.commit=$release_commit -X main.buildTime=$release_time" \
       -o "$package_dir/$executable" ./cmd/hostmcp
     cp LICENSE NOTICE "$package_dir/"
-    cp README.md "$package_dir/"
+    cp README.md README.zh-CN.md "$package_dir/"
     cp -R docs "$package_dir/docs"
     cp deploy/README.md "$package_dir/docs/native-services.md"
     cp -R "$temp_dir/licenses" "$package_dir/licenses"
     COPYFILE_DISABLE=1 tar -C "$package_dir" -czf "$output_dir/${executable}_${release_version}_${target_os}_${target_arch}.tar.gz" \
-      "$executable" LICENSE NOTICE README.md docs licenses
+      "$executable" LICENSE NOTICE README.md README.zh-CN.md docs licenses
   done
 done
 

@@ -8,7 +8,7 @@ on:
       version:
         description: 'Archive version (manual branch runs build artifacts only)'
         required: true
-        default: v0.2.3
+        default: v0.2.4
 
 permissions:
   contents: read
@@ -24,8 +24,8 @@ jobs:
     env:
       GOFLAGS: -mod=readonly
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.27.3'
           cache: true
@@ -45,8 +45,8 @@ jobs:
       GOFLAGS: -mod=readonly
       RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.event.inputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.27.3'
           cache: true
@@ -54,7 +54,7 @@ jobs:
         run: bash scripts/release.sh "$RELEASE_VERSION"
       - name: Verify component packaging and offline updater
         run: python3 scripts/packaging-smoke.py --dist dist --version "$RELEASE_VERSION"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-archives
           path: dist/*
@@ -68,7 +68,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+            scripts/changelog-notes.sh
+          sparse-checkout-cone-mode: false
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          if ! sh scripts/changelog-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-archives
           path: dist
@@ -76,4 +88,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "HostMCP $GITHUB_REF_NAME" --generate-notes
+        # The changelog section comes first; --generate-notes appends the PR list.
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag
+          --title "HostMCP $GITHUB_REF_NAME"
+          --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes

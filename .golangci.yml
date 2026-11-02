@@ -1,0 +1,51 @@
+# golangci-lint v2 configuration.
+# The rule set is deliberately conservative: correctness checks only.
+# Style-only staticcheck checks (ST*, QF*) are left to review.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        # Best-effort cleanup; the connection or lock is being abandoned.
+        - (*github.com/coder/websocket.Conn).CloseNow
+        - syscall.Flock
+    staticcheck:
+      checks:
+        - all
+        - -ST*
+        - -QF*
+  exclusions:
+    presets:
+      # Unchecked Close/Remove/Flush during cleanup is intentional here.
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+      # Existing P-256 point validation; migrating to crypto/ecdh is a
+      # runtime change tracked separately from lint adoption.
+      - path: internal/oauth/verifier\.go
+        linters:
+          - staticcheck
+        text: "SA1019: \\(crypto/elliptic.Curve\\).IsOnCurve"
+    paths:
+      - reference/
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - reference/
