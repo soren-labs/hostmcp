@@ -55,6 +55,12 @@ func updaterFixture(t *testing.T) (Policy, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// t.TempDir creates its directory with mode 0777 minus the umask. Under a
+	// common umask of 002 that is group-writable, which the updater rightly
+	// rejects, so give the fixture the private mode a real install would have.
+	if err = os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	old := testBinary("0.2.1", "agent", 1)
 	binary := filepath.Join(dir, "hostmcp-agent")
 	if err = os.WriteFile(binary, old, 0755); err != nil {

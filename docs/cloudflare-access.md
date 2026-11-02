@@ -189,5 +189,5 @@ SDK calls, wire dispatch identity, real isolated process-session ownership,
 invalid credentials, cert failures/timeouts/rotation, revocation, mode coexistence,
 and agent/enrollment isolation. No real Access team, deployed service, live account,
 browser, installed application or production config is contacted. See the
-[v0.2.3 validation record](validation-cloudflare-access.md) for command results and
+[v0.2.3 validation record](validation/v0.2.3-cloudflare-access.md) for command results and
 environment limits.

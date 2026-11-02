@@ -5,7 +5,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
       args:
-        VERSION: ${HOSTMCP_VERSION:-0.2.2-dev}
+        # Empty uses the version declared in the checked-out source.
+        VERSION: ${HOSTMCP_VERSION:-}
     image: hostmcp:local
     command: ["hub", "serve", "--config", "/state/hub.json"]
     ports:

@@ -194,6 +194,10 @@ macOS 系统服务日志位于 `/Library/Logs/HostMCP/NAME/service.log`，用户
 容器仅用于 Hub。设备 Agent 在各自宿主系统中原生运行，才能看到该用户实际的
 文件、工具与进程环境。
 
+镜像构建需要 BuildKit（安装 `docker buildx` 插件；Docker Desktop 已自带）。旧版
+构建器不支持 Dockerfile 中的 `$BUILDPLATFORM`，会报 `failed to parse platform`。
+不设置 `HOSTMCP_VERSION` 时，镜像报告源码中声明的版本。
+
 ```sh
 docker compose -f deploy/compose.yml build
 docker compose -f deploy/compose.yml run --rm hub \
@@ -214,7 +218,7 @@ docker compose -f deploy/compose.yml down
 ```
 
 不要加 --volumes，除非明确决定删除配置、邀请和凭证。容器示例是否实际构建与
-验证以 validation.md 为准，提供模板不等同于已经通过 Docker 实机验收。
+验证以[验证记录](validation/README.md)为准，提供模板不等同于已经通过 Docker 实机验收。
 
 ## 独立组件、OAuth 与可选更新
 

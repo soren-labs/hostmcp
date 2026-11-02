@@ -57,7 +57,8 @@ Config format, private wire version and component build version are separate:
   its build version; welcome optionally reports the Hub build version/component.
   Old peers ignore these new fields. Release builds inject the same version into
   CLI, MCP server, health endpoint and device inventory. Unstamped source builds
-  identify themselves as `0.2.3-dev`. The v0.2.3 Cloudflare Access identity mode is
+  report the next development version with a `-dev` suffix (for example
+  `0.2.4-dev` after v0.2.3). The v0.2.3 Cloudflare Access identity mode is
   [Hub-only](cloudflare-access.md); existing Agents require no replacement.
 
 `TestCompatibilityLegacyAgentWithOAuthHub` sends the old v0.2.1 hello field set to

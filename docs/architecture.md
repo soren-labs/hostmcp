@@ -20,7 +20,7 @@ Agent。这样，部署在小 VPS 上的 Hub 只负责控制和转发，构建�
 
 ## 为什么使用 Go
 
-历史提取计划优先考虑 Node/TypeScript。完成源码检查后，当前实现改用 Go：
+历史[提取计划](history/extraction-plan.md)优先考虑 Node/TypeScript。完成源码检查后，当前实现改用 Go：
 
 - 原兼容二进制保留；新增独立 Hub/Agent 角色产物，生命周期可分别管理。
 - 每种角色构建 linux/amd64、linux/arm64、darwin/amd64、darwin/arm64 四种目标。
@@ -30,7 +30,7 @@ Agent。这样，部署在小 VPS 上的 Hub 只负责控制和转发，构建�
 - 原生 POSIX 进程和 PTY 能直接继承系统用户身份，无须容器来承载设备能力。
 
 这是部署复杂度与资源使用的工程选择，不能从语言选型直接推导最低内存。实际
-RSS、空闲 CPU 和并发表现需在目标机器上测量，记录在 validation.md。
+RSS、空闲 CPU 和并发表现需在目标机器上测量，记录在[验证记录](validation/README.md)。
 
 依赖版本以 go.mod/go.sum 为准。参考 TypeScript 文件保持不可修改，不进入 Go
 运行时构建，也不声称其上游测试已经通过。

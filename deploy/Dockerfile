@@ -7,11 +7,15 @@ COPY . .
 # BuildKit supplies the target platform; do not force an amd64 binary on arm64.
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=0.2.2-dev
+# Leave VERSION empty to report the version declared in the source tree.
+ARG VERSION=
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-    -ldflags "-s -w -X main.version=$VERSION -X github.com/soren-labs/hostmcp/internal/protocol.Version=$VERSION -X main.component=hub -X main.commit=$COMMIT -X main.buildTime=$BUILD_TIME" \
+RUN ldflags="-s -w -X main.component=hub -X main.commit=$COMMIT -X main.buildTime=$BUILD_TIME"; \
+    if [ -n "$VERSION" ]; then \
+      ldflags="$ldflags -X main.version=$VERSION -X github.com/soren-labs/hostmcp/internal/protocol.Version=$VERSION"; \
+    fi; \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "$ldflags" \
     -o /out/hostmcp ./cmd/hostmcp
 RUN mkdir -p /licenses /state && chmod 0700 /state && \
     go list -m -f '{{if not .Main}}{{.Path}}@{{.Version}} {{.Dir}}{{end}}' all | \

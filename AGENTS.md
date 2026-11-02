@@ -1,21 +1,58 @@
-# HostMCP
+# HostMCP — notes for coding agents
 
-Build a small headless MCP host for Linux and macOS. The user explicitly wants tools
-to operate with the full ordinary privileges of the OS account running the service.
+HostMCP is a self-hosted MCP gateway for Linux and macOS, written in Go. A Hub
+authenticates MCP clients and routes tool calls over outbound WebSocket
+connections to native device Agents. Each Agent runs as one OS account and its
+tools act with that account's ordinary privileges.
 
-- The initial commit is a source-extraction baseline, not a working MCP server.
-- Treat `reference/chat-on-steroids/` as immutable upstream evidence. Adapt code into
-  a new runtime tree when implementation starts; keep the provenance hashes intact.
-- Preserve upstream copyright headers and the MIT/Apache attribution in `NOTICE`.
-- Use real OS paths. Do not restore approved-folder policy or browser conversation
-  identity as a prerequisite for ordinary filesystem and process operations.
+## Layout
+
+| Path | Purpose |
+| --- | --- |
+| `cmd/hostmcp` | CLI entry point: `hub`, `device`, `token`, `agent`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `agent` variant. |
+| `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing. Never executes commands. |
+| `internal/agent` | Outbound Agent connection loop with heartbeats and reconnect backoff. |
+| `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `write_file`, `apply_patch`, `view_image`. |
+| `internal/mcpserver` | Maps native tools onto the official MCP Go SDK. |
+| `internal/protocol` | Private Hub↔Agent wire protocol (wire version 1). |
+| `internal/config` | Hub/Agent configuration files and the locked configuration store. |
+| `internal/oauth`, `internal/cloudflareaccess` | JWT access-token and Access-assertion verifiers. |
+| `internal/service` | systemd and launchd user/system service installers. |
+| `internal/update` | Opt-in, checksum-pinned Agent updater. |
+| `scripts/` | Smoke tests, packaging, installer, source verification. |
+| `docs/` | User documentation. `docs/validation/` holds test evidence. |
+| `reference/chat-on-steroids/` | Immutable upstream snapshot. Not built or imported. |
+
+## Commands
+
+```sh
+make check        # verify source snapshot, gofmt, vet, lint, race tests, stdio smoke test
+make build        # ./build/hostmcp
+```
+
+`make lint` needs [golangci-lint](https://golangci-lint.run/) v2. The underlying
+commands are listed in `Makefile` and `CONTRIBUTING.md`.
+
+## Rules
+
+- Treat `reference/chat-on-steroids/` and `provenance/upstream.json` as immutable
+  upstream evidence. Preserve upstream copyright headers and the MIT/Apache
+  attribution in `LICENSE`, `NOTICE` and `ATTRIBUTION.md`.
+- Use real OS paths. Do not add approved-folder policies, command allowlists or
+  browser conversation identity in front of ordinary file and process operations.
 - Full user authority does not mean automatic root elevation or bypassing macOS
   privacy permissions. Preserve OS errors and normal user environment semantics.
 - Keep transport authentication, input validation, bounded output and process
   ownership separate from OS filesystem permissions.
+- The Hub routes; it never runs device commands. Keep that separation.
+- Wire version 1 is a compatibility contract: new message fields must be
+  optional, and existing request/result meanings must not change. See
+  `docs/components-updates.md`.
 - Target standard MCP clients over stdio and Streamable HTTP. No Electron,
-  renderer, tray, browser extension, ChatGPT DOM automation, model API, or GUI.
-- Do not read, copy, modify, restart, install over, or connect tests to a running
-  Chat On Steroids installation or its user data. Use isolated temporary fixtures.
-- Source checks: `python3 scripts/verify-source-import.py`. Runtime and Linux/macOS
-  claims require their own actual tests once the new service exists.
+  renderer, tray, browser extension, ChatGPT DOM automation, model API or GUI.
+- Tests use isolated temporary directories and test-only credentials. Never
+  connect tests to a running Chat On Steroids installation, a real Hub, or real
+  user data.
+- Only claim a platform, deployment or client as tested when it was actually
+  tested. Record evidence under `docs/validation/` without secrets.
+- Add user-visible changes to the `Unreleased` section of `CHANGELOG.md`.

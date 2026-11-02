@@ -134,7 +134,7 @@ python3 scripts/verify-access.py --binary /absolute/path/hostmcp \
 
 该脚本检查账户执行与访问范围；它不会擅自修改账户组、sudoers 或管理员权限。
 完整九工具验收继续使用 `scripts/smoke.py`；长任务和重连的实际边界见
-[验证记录](validation.md)。
+[验证记录](validation/README.md)。
 
 ## 6. 撤销和卸载
 
