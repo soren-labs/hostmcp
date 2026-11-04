@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -215,6 +216,82 @@ func TestRequestDeadlineReleasesSDKSubscription(t *testing.T) {
 		t.Fatal("SDK subscription did not release its request after expiry")
 	}
 	assertClientSlotsReleased(t, h)
+}
+
+func TestRequestDeadlineBoundsLegacyToolCall(t *testing.T) {
+	for _, version := range []string{"2025-06-18", "2025-11-25"} {
+		t.Run(version, func(t *testing.T) {
+			h, srv, _ := fixture(t)
+			h.requestDeadline = 150 * time.Millisecond
+			exec := &recordingExecutor{started: make(chan struct{}), release: make(chan struct{})}
+			defer close(exec.release)
+			startAgent(t, srv.URL, exec)
+			eventually(t, func() bool { return online(h) })
+			session := mcpClient(t, srv.URL, aliceToken, version)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			callDone := make(chan struct{})
+			go func() {
+				defer close(callDone)
+				_, _ = session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": "dev1", "text": "wait"}})
+			}()
+			t.Cleanup(func() {
+				select {
+				case <-callDone:
+				case <-time.After(3 * time.Second):
+					t.Error("client call did not stop")
+				}
+			})
+			select {
+			case <-exec.started:
+			case <-time.After(time.Second):
+				t.Fatal("tool was not dispatched")
+			}
+			// The SDK intentionally detaches legacy handler contexts from HTTP
+			// cancellation. Its session drain must still obey the Hub deadline,
+			// instead of retaining the slot until the separate 45s Call timeout.
+			until := time.Now().Add(time.Second)
+			for len(h.requests) != 0 && time.Now().Before(until) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if n := len(h.requests); n != 0 {
+				t.Fatalf("legacy SDK session retained %d request slot past the deadline", n)
+			}
+		})
+	}
+}
+
+func TestRequestDeadlinePreservesDispatchOutcome(t *testing.T) {
+	h, srv, _ := fixture(t)
+	exec := &recordingExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	defer close(exec.release)
+	startAgent(t, srv.URL, exec)
+	eventually(t, func() bool { return online(h) })
+	args := json.RawMessage(`{"text":"deadline"}`)
+	expired := context.WithValue(context.Background(), requestDeadlineKey{}, time.Now().Add(-time.Second))
+	_, err := h.Call(expired, "alice", "dev1", "echo", args)
+	if err == nil || !strings.Contains(err.Error(), "command was not dispatched") || exec.calls.Load() != 0 {
+		t.Fatalf("expired request must never dispatch: calls=%d err=%v", exec.calls.Load(), err)
+	}
+	if !online(h) {
+		t.Fatal("rejecting an expired request disconnected the healthy agent")
+	}
+	admitted := context.WithValue(context.Background(), requestDeadlineKey{}, time.Now().Add(150*time.Millisecond))
+	_, err = h.Call(admitted, "alice", "dev1", "echo", args)
+	if err == nil || !strings.Contains(err.Error(), "execution outcome unknown") || exec.calls.Load() != 1 {
+		t.Fatalf("dispatched request must retain unknown-outcome semantics: calls=%d err=%v", exec.calls.Load(), err)
+	}
+	// The first executor call is still waiting on release. Its response timeout
+	// must not close the agent connection or stop it from serving another call.
+	if !online(h) {
+		t.Fatal("response deadline disconnected the agent")
+	}
+	if _, err := h.Call(context.Background(), "alice", "dev1", "echo", args); err != nil {
+		t.Fatalf("agent could not serve another request after deadline: %v", err)
+	}
+	if exec.calls.Load() != 2 {
+		t.Fatalf("unexpected execution count: %d", exec.calls.Load())
+	}
 }
 
 // One noisy event kind, such as a stale agent retrying a revoked credential,

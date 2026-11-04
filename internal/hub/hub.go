@@ -71,6 +71,11 @@ const defaultRequestDeadline = 48 * time.Second
 // defaultAuditEvery limits each audit event kind to one log line per interval.
 const defaultAuditEvery = 5 * time.Second
 
+// The SDK detaches legacy tool-handler contexts from the HTTP context's Done
+// and Deadline methods. Values survive that detachment, so keep the absolute
+// admission deadline here and restore it at the Hub's dispatch boundary.
+type requestDeadlineKey struct{}
+
 type clientLimit struct {
 	slots chan struct{}
 	refs  int
@@ -290,6 +295,8 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		}
 		requestCtx, cancelRequest := context.WithTimeout(r.Context(), h.requestDeadline)
 		defer cancelRequest()
+		deadline, _ := requestCtx.Deadline()
+		requestCtx = context.WithValue(requestCtx, requestDeadlineKey{}, deadline)
 		stopIO := interruptRequestIO(requestCtx, w)
 		defer stopIO()
 		next.ServeHTTP(w, r.WithContext(requestCtx))
@@ -709,6 +716,11 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		}
 		log.Printf("event=tool_call principal=%q device=%q tool=%q request_id=%q outcome=%q elapsed_ms=%d", auditPrincipal(principal), device, tool, requestID, status, time.Since(start).Milliseconds())
 	}()
+	if deadline, ok := ctx.Value(requestDeadlineKey{}).(time.Time); ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
 	client, err := h.client(principal)
 	if err != nil {
 		return protocol.Result{}, err
@@ -743,6 +755,10 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 	defer func() { d.mu.Lock(); delete(d.pending, id); d.mu.Unlock() }()
 	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	if err := callCtx.Err(); err != nil {
+		requestID = "not_dispatched"
+		return protocol.Result{}, fmt.Errorf("request canceled before dispatch; command was not dispatched: %w", err)
+	}
 	writeCtx, writeCancel := context.WithTimeout(callCtx, 10*time.Second)
 	err = wsjson.Write(writeCtx, d.conn, protocol.Message{Type: "request", ID: id, Principal: principal, Tool: tool, Args: args})
 	writeCancel()
