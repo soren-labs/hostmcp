@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -20,10 +21,20 @@ import (
 
 const maxConcurrentRequests = 16
 
+const (
+	heartbeatInterval = 20 * time.Second
+	heartbeatTimeout  = 8 * time.Second
+)
+
 // Run reconnects the transport while retaining the caller-owned executor. It
 // never resends a tool request. A disconnected reply is lost, but managed
 // processes remain queryable through the executor after reconnection.
 func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info protocol.Device) error {
+	return runWithHeartbeat(ctx, cfg, executor, info, heartbeatInterval, heartbeatTimeout)
+}
+
+// Keep heartbeat timing local to a run so tests do not mutate process-wide state.
+func runWithHeartbeat(ctx context.Context, cfg config.Agent, executor protocol.Executor, info protocol.Device, interval, timeout time.Duration) error {
 	endpoint, err := endpointURL(cfg)
 	if err != nil {
 		return err
@@ -49,7 +60,7 @@ func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info
 			return nil
 		}
 		start := time.Now()
-		err = connect(ctx, endpoint, cfg.Token, executor, info, slots, seen, &workers)
+		err = connect(ctx, endpoint, cfg.Token, executor, info, slots, seen, &workers, interval, timeout)
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -112,7 +123,7 @@ func (e *authorizationError) Error() string {
 	return fmt.Sprintf("hub rejected device authentication (HTTP %d); check enrollment or revocation", e.code)
 }
 
-func connect(ctx context.Context, endpoint, token string, executor protocol.Executor, info protocol.Device, slots chan struct{}, seen *requestIDs, workers *sync.WaitGroup) error {
+func connect(ctx context.Context, endpoint, token string, executor protocol.Executor, info protocol.Device, slots chan struct{}, seen *requestIDs, workers *sync.WaitGroup, interval, timeout time.Duration) (err error) {
 	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	conn, response, err := websocket.Dial(dialCtx, endpoint, &websocket.DialOptions{
 		HTTPHeader:      http.Header{"Authorization": []string{"Bearer " + token}},
@@ -143,23 +154,17 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	}
 	log.Printf("device %s connected; hub_version=%q wire_version=%d", info.ID, welcome.BuildVersion, welcome.Version)
 	connectionCtx, stop := context.WithCancel(ctx)
-	defer stop()
+	heartbeatDone := make(chan error, 1)
 	go func() {
-		ticker := time.NewTicker(20 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-connectionCtx.Done():
-				return
-			case <-ticker.C:
-				pingCtx, cancel := context.WithTimeout(connectionCtx, 8*time.Second)
-				err := conn.Ping(pingCtx)
-				cancel()
-				if err != nil {
-					conn.CloseNow()
-					return
-				}
-			}
+		heartbeatDone <- heartbeat(connectionCtx, conn, interval, timeout)
+	}()
+	defer func() {
+		stop()
+		// Ping's write timeout can close the socket before Ping returns. Join
+		// the heartbeat so the reader cannot hide that cause or leave an old
+		// connection's heartbeat running after reconnecting.
+		if heartbeatErr := <-heartbeatDone; heartbeatErr != nil && ctx.Err() == nil {
+			err = heartbeatErr
 		}
 	}()
 	for {
@@ -203,6 +208,33 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 			_ = conn.Write(replyCtx, websocket.MessageText, encoded)
 			cancel()
 		}(msg)
+	}
+}
+
+func heartbeat(ctx context.Context, conn *websocket.Conn, interval, timeout time.Duration) error {
+	defer conn.CloseNow()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			pingCtx, cancel := context.WithTimeout(ctx, timeout)
+			err := conn.Ping(pingCtx)
+			cancel()
+			if err == nil {
+				continue
+			}
+			// Preserve a ping deadline even if the reader has already failed
+			// and cancelled ctx. Ordinary peer closes and shutdown cancellation
+			// should keep the reader's original reason instead.
+			if !errors.Is(err, context.DeadlineExceeded) &&
+				(ctx.Err() != nil || errors.Is(err, net.ErrClosed) || websocket.CloseStatus(err) != -1) {
+				return nil
+			}
+			return fmt.Errorf("heartbeat failed: %w", err)
+		}
 	}
 }
 

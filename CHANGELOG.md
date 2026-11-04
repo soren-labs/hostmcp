@@ -34,8 +34,38 @@ are generated from the matching section of this file.
   common on Ubuntu. The updater itself still rejects group-writable directories.
 - Static MCP tool capability (`tools.listChanged: false`) so SEP-2575 (`2026-07-28`)
   clients such as Claude Web do not hold open long-lived `subscriptions/listen`
-  streams and exhaust per-principal concurrency slots; sampled `principal_busy` /
-  `hub_busy` audit events on HTTP 503 and sanitized Caddy access log template.
+  streams and exhaust per-principal concurrency slots; sampled `mcp_busy` events
+  (`principal_busy` / `hub_busy`) on HTTP 503 and sanitized Caddy access log template.
+- Admitted `/mcp` requests have a 48-second context deadline that also interrupts
+  stalled request-body reads and response writes. Context-aware handlers and
+  parked subscription streams release their concurrency slots on expiry, logged
+  as `event=mcp_deadline`. Shorter server I/O limits still apply; completed
+  requests cannot leave a timeout callback affecting a reused connection.
+- The same absolute request deadline reaches tool dispatch for legacy MCP
+  protocols whose SDK contexts detach HTTP cancellation. Expired requests are
+  rejected before dispatch; already-dispatched operations keep their unknown
+  outcome semantics and do not lose the Agent connection or running command.
+- Audit log sampling is per event kind and reports `suppressed=N`. A stale agent
+  retrying a revoked credential no longer hides MCP denials or capacity
+  rejections, and agent denials name the (validated) node ID. Capacity
+  rejections are logged as `event=mcp_busy` instead of `event=auth_denied`.
+- Agent heartbeat diagnostics retain ping write/response timeout causes, even
+  when the socket closes before Ping returns. Normal Hub shutdowns keep their
+  original close reason, and heartbeat goroutines finish before reconnecting.
+- Non-PTY `exec_command` waits for command completion or `yield_time_ms`, instead
+  of returning on an early output banner. PTYs and `write_stdin` remain responsive
+  to the first output; a full output budget also returns early. Cancelling a call
+  preserves its already-started command and unread output for later polling.
+
+### Performance and compatibility
+
+- Hub configuration parsing and validation are reused for byte-identical files.
+  Each check still reads the current private file, so there is no TTL or metadata
+  cache delaying revocation. Invalid or unreadable files fail closed, and returned
+  snapshots own their nested grants independently.
+- MCP results intentionally retain both structured JSON and the JSON text
+  fallback recommended by the protocol. Regression tests cover both client
+  representations, partial failures, Unicode, and large integer precision.
 
 ## v0.2.3 — 2026-10-28
 

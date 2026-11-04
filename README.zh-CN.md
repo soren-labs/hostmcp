@@ -65,6 +65,11 @@ Hub 自己从不执行命令。要管理 Hub 所在的机器，也在那台机�
 连接远程 Hub 时，每个设备工具都需要 `device` 参数，取值为 `list_devices` 返回的
 节点 ID。本地 `stdio` 模式直接作用于当前机器。
 
+非 PTY 的 `exec_command` 会等待命令结束或达到 `yield_time_ms`（默认 1000 毫秒，
+设为 0 立即返回）。PTY 和 `write_stdin` 在有可读输出时返回；输出达到本次返回
+上限时也会提前返回。仍在运行的命令保留 session，可继续查询。
+`timeout_seconds` 单独控制命令本身的执行时限。
+
 ## 安装
 
 Linux 和 macOS（amd64、arm64）的预编译版本在

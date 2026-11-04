@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -84,7 +86,12 @@ type Invite struct {
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
-type Store struct{ Path string }
+type Store struct {
+	Path        string
+	mu          sync.Mutex
+	cachedBytes []byte
+	cached      Hub
+}
 
 func NewStore(path string) *Store { return &Store{Path: path} }
 
@@ -149,31 +156,52 @@ func CheckURL(raw string, allowInsecure bool) (*url.URL, error) {
 }
 
 func ReadJSON(path string, out any) error {
-	f, err := os.Open(path)
+	b, err := readConfigFile(path)
 	if err != nil {
 		return err
+	}
+	return decodeJSON(b, out)
+}
+
+// readConfigFile always checks the current file, including permissions. A
+// previously valid configuration must never mask a read or validation failure.
+func readConfigFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !st.Mode().IsRegular() {
-		return errors.New("configuration must be a regular file")
+		return nil, errors.New("configuration must be a regular file")
 	}
 	if st.Mode().Perm()&0077 != 0 {
-		return fmt.Errorf("configuration %s must be private: chmod 600 it", path)
+		return nil, fmt.Errorf("configuration %s must be private: chmod 600 it", path)
 	}
 	if st.Size() > maxConfigBytes {
-		return errors.New("configuration exceeds 1 MiB")
+		return nil, errors.New("configuration exceeds 1 MiB")
 	}
-	d := json.NewDecoder(io.LimitReader(f, maxConfigBytes+1))
+	b, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxConfigBytes {
+		return nil, errors.New("configuration exceeds 1 MiB")
+	}
+	return b, nil
+}
+
+func decodeJSON(b []byte, out any) error {
+	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
-	if err = d.Decode(out); err != nil {
+	if err := d.Decode(out); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 	var extra any
-	if err = d.Decode(&extra); err != io.EOF {
+	if err := d.Decode(&extra); err != io.EOF {
 		return errors.New("configuration contains trailing JSON")
 	}
 	return nil
@@ -272,17 +300,6 @@ func preserveOwner(f *os.File, original os.FileInfo) error {
 		return fmt.Errorf("cannot preserve configuration owner %d:%d: %w", want.Uid, want.Gid, err)
 	}
 	return nil
-}
-
-func (s *Store) Snapshot() (Hub, error) {
-	var h Hub
-	if err := ReadJSON(s.Path, &h); err != nil {
-		return h, err
-	}
-	if err := validate(h); err != nil {
-		return h, err
-	}
-	return h, nil
 }
 
 func validate(h Hub) error {
