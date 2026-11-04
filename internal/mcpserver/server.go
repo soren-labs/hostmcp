@@ -116,6 +116,10 @@ func New(opts Options) *mcp.Server {
 
 // Convert preserves both human-readable and structured results. OS/tool errors
 // are MCP tool errors, rather than JSON-RPC transport failures.
+// The JSON TextContent fallback is intentional: MCP recommends it for clients
+// that do not consume structuredContent, and the Go SDK does the same. Removing
+// either representation would silently discard results for one class of client.
+// https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content
 func Convert(result protocol.Result) *mcp.CallToolResult {
 	out := &mcp.CallToolResult{Content: []mcp.Content{}}
 	if result.Error != "" {
