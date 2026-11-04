@@ -20,6 +20,12 @@ import (
 
 const maxConcurrentRequests = 16
 
+// Heartbeat timing. These are variables only so tests can shorten them.
+var (
+	heartbeatInterval = 20 * time.Second
+	heartbeatTimeout  = 8 * time.Second
+)
+
 // Run reconnects the transport while retaining the caller-owned executor. It
 // never resends a tool request. A disconnected reply is lost, but managed
 // processes remain queryable through the executor after reconnection.
@@ -144,18 +150,26 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	log.Printf("device %s connected; hub_version=%q wire_version=%d", info.ID, welcome.BuildVersion, welcome.Version)
 	connectionCtx, stop := context.WithCancel(ctx)
 	defer stop()
+	// A failed ping closes the socket to unblock the reader. Record why first,
+	// so the reconnect log names the heartbeat instead of the resulting
+	// "use of closed network connection" read error.
+	heartbeatErr := make(chan error, 1)
+	interval, timeout := heartbeatInterval, heartbeatTimeout
 	go func() {
-		ticker := time.NewTicker(20 * time.Second)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-connectionCtx.Done():
 				return
 			case <-ticker.C:
-				pingCtx, cancel := context.WithTimeout(connectionCtx, 8*time.Second)
+				pingCtx, cancel := context.WithTimeout(connectionCtx, timeout)
 				err := conn.Ping(pingCtx)
 				cancel()
 				if err != nil {
+					if connectionCtx.Err() == nil {
+						heartbeatErr <- err
+					}
 					conn.CloseNow()
 					return
 				}
@@ -165,6 +179,11 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	for {
 		var msg protocol.Message
 		if err := wsjson.Read(connectionCtx, conn, &msg); err != nil {
+			select {
+			case pingErr := <-heartbeatErr:
+				return fmt.Errorf("heartbeat failed (no pong within %s): %w", timeout, pingErr)
+			default:
+			}
 			return err
 		}
 		if msg.Type != "request" || msg.ID == "" || len(msg.ID) > 128 || msg.Principal == "" || len(msg.Principal) > 128 || msg.Tool == "" || len(msg.Tool) > 128 {

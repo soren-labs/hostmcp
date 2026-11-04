@@ -50,9 +50,29 @@ type Hub struct {
 	handshakes      chan struct{}
 	limitsMu        sync.Mutex
 	clientSlots     map[string]*clientLimit
-	lastDenied      atomic.Int64
 	lastConfigError atomic.Int64
+	// requestDeadline bounds every admitted /mcp request; auditEvery is the
+	// minimum interval between log lines for one audit event kind. Both are
+	// fields so tests can shorten them.
+	requestDeadline time.Duration
+	auditEvery      time.Duration
+	auditMu         sync.Mutex
+	auditLast       map[string]time.Time
+	auditSuppressed map[string]int64
 }
+
+// defaultRequestDeadline ends any admitted /mcp request, and releases its
+// concurrency slots, even when a handler would otherwise wait for the client
+// to cancel. A SEP-2575 subscriptions/listen stream parks like this whenever a
+// capability with listChanged or subscribe is advertised; before tools were
+// made static, four such streams locked a principal out for half an hour.
+// It exceeds Call's 45s dispatch deadline and stays inside the server's 50s
+// WriteTimeout, so normal tool results are unaffected.
+const defaultRequestDeadline = 48 * time.Second
+
+// defaultAuditEvery limits each audit event kind to one log line per interval.
+const defaultAuditEvery = 5 * time.Second
+
 type clientLimit struct {
 	slots chan struct{}
 	refs  int
@@ -79,7 +99,7 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit)}
+	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit), requestDeadline: defaultRequestDeadline, auditEvery: defaultAuditEvery}
 	if cfg.CloudflareAccess != nil {
 		h.access, err = cloudflareaccess.New(ctx, *cfg.CloudflareAccess)
 		if err != nil {
@@ -173,14 +193,40 @@ func auditPrincipal(p string) string {
 	return p
 }
 
-// Failed authentications are sampled so token sprays cannot create unbounded
-// log volume. No token, hash, request body, or command arguments are logged.
-func (h *Hub) auditDenied(endpoint, reason string) {
-	now := time.Now().UnixNano()
-	last := h.lastDenied.Load()
-	if now-last > int64(5*time.Second) && h.lastDenied.CompareAndSwap(last, now) {
-		log.Printf("event=auth_denied endpoint=%q reason=%q", endpoint, reason)
+// audit logs an operational event at most once per auditEvery for each
+// event/endpoint/reason combination, and reports how many identical events
+// were suppressed since the previous line. Sampling per kind means a noisy
+// stale agent cannot hide MCP denials or capacity rejections. Keys are code
+// constants, so the maps stay bounded. attrs are key/value pairs of
+// non-secret values; never pass tokens, hashes, request bodies or arguments.
+func (h *Hub) audit(event, endpoint, reason string, attrs ...string) {
+	key := event + "\x00" + endpoint + "\x00" + reason
+	now := time.Now()
+	h.auditMu.Lock()
+	if h.auditLast == nil {
+		h.auditLast = map[string]time.Time{}
+		h.auditSuppressed = map[string]int64{}
 	}
+	if last, ok := h.auditLast[key]; ok && now.Sub(last) < h.auditEvery {
+		h.auditSuppressed[key]++
+		h.auditMu.Unlock()
+		return
+	}
+	suppressed := h.auditSuppressed[key]
+	h.auditLast[key] = now
+	delete(h.auditSuppressed, key)
+	h.auditMu.Unlock()
+	var extra strings.Builder
+	for i := 0; i+1 < len(attrs); i += 2 {
+		fmt.Fprintf(&extra, " %s=%q", attrs[i], attrs[i+1])
+	}
+	log.Printf("event=%s endpoint=%q reason=%q%s suppressed=%d", event, endpoint, reason, extra.String(), suppressed)
+}
+
+// auditDenied records a rejected request. No token, hash, request body, or
+// command arguments are logged.
+func (h *Hub) auditDenied(endpoint, reason string, attrs ...string) {
+	h.audit("auth_denied", endpoint, reason, attrs...)
 }
 
 func (h *Hub) boundedClient(next http.Handler) http.Handler {
@@ -230,7 +276,7 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		case limit.slots <- struct{}{}:
 			defer func() { <-limit.slots }()
 		case <-ctx.Done():
-			h.auditDenied("mcp", "principal_busy")
+			h.audit("mcp_busy", "mcp", "principal_busy")
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "principal has too many active requests; retry", 503)
 			return
@@ -239,12 +285,17 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		case h.requests <- struct{}{}:
 			defer func() { <-h.requests }()
 		case <-ctx.Done():
-			h.auditDenied("mcp", "hub_busy")
+			h.audit("mcp_busy", "mcp", "hub_busy")
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "hub has too many active requests; retry", 503)
 			return
 		}
-		next.ServeHTTP(w, r)
+		requestCtx, cancelRequest := context.WithTimeout(r.Context(), h.requestDeadline)
+		defer cancelRequest()
+		next.ServeHTTP(w, r.WithContext(requestCtx))
+		if errors.Is(requestCtx.Err(), context.DeadlineExceeded) {
+			h.audit("mcp_deadline", "mcp", "request_deadline")
+		}
 	})
 }
 
@@ -389,7 +440,13 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/agent/")
 	token := bearer(r)
 	if id == "" || strings.Contains(id, "/") || !h.store.AuthDevice(id, token) {
-		h.auditDenied("agent", "invalid_credentials")
+		// A valid-looking node ID is not secret and identifies stale agents
+		// that keep retrying with a revoked or renamed credential.
+		device := "invalid"
+		if config.ValidID(id) {
+			device = id
+		}
+		h.auditDenied("agent", "invalid_credentials", "device", device)
 		w.Header().Set("WWW-Authenticate", "Bearer realm=\"hostmcp-device\"")
 		http.Error(w, "invalid device credentials", 401)
 		return

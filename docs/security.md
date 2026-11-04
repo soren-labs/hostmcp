@@ -97,6 +97,8 @@ OAuth subject 与客户端 ID 的会话身份独立于 legacy owner；scope 不�
 - macOS 的完整磁盘访问等授权应交给系统设置；headless 服务不能凭 UID 假定
   自动拥有所有 GUI 能力。
 - 输出、文件大小、并发和 session 数量的上限是资源边界，不是目录权限白名单。
+- 每个远端 MCP HTTP 请求最长 48 秒，到期即释放并发槽位（日志 `event=mcp_deadline`）；
+  满载拒绝记录为 `event=mcp_busy`。
 - 同一客户端凭证最多同时占用 4 个远端 MCP HTTP 请求，全局容量为 24；
   设备邀请加入有独立的 2 个槽位。满载时短暂排队并返回 503，调用方须退避重试。
 - `apply_patch` 更新现有文件时保留其 inode、所有者及权限位；但多文件补丁

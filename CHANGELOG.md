@@ -34,8 +34,18 @@ are generated from the matching section of this file.
   common on Ubuntu. The updater itself still rejects group-writable directories.
 - Static MCP tool capability (`tools.listChanged: false`) so SEP-2575 (`2026-07-28`)
   clients such as Claude Web do not hold open long-lived `subscriptions/listen`
-  streams and exhaust per-principal concurrency slots; sampled `principal_busy` /
-  `hub_busy` audit events on HTTP 503 and sanitized Caddy access log template.
+  streams and exhaust per-principal concurrency slots; sampled `mcp_busy` events
+  (`principal_busy` / `hub_busy`) on HTTP 503 and sanitized Caddy access log template.
+- Every admitted `/mcp` request now ends after 48 seconds and releases its
+  concurrency slots, so a handler that waits for client cancellation (such as a
+  `subscriptions/listen` stream, should a capability re-enable one) can no longer
+  lock a principal out. Expiry is logged as `event=mcp_deadline`.
+- Audit log sampling is per event kind and reports `suppressed=N`. A stale agent
+  retrying a revoked credential no longer hides MCP denials or capacity
+  rejections, and agent denials name the (validated) node ID. Capacity
+  rejections are logged as `event=mcp_busy` instead of `event=auth_denied`.
+- Agents report `heartbeat failed` when a ping goes unanswered, instead of the
+  misleading `use of closed network connection`.
 
 ## v0.2.3 — 2026-10-28
 

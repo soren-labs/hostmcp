@@ -102,6 +102,11 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
    `oauth_configuration.grant.session_duration` (for example `8760h`) and
    `oauth_configuration.grant.access_token_lifetime` (up to `720h`) via the
    Cloudflare API/CLI so active sessions do not expire after the 15-minute default.
+   Longer lifetimes widen exposure: an Access token grants the native authority
+   of every node mapped to its email, including root nodes, until it expires or
+   the session is revoked in Access. Use the shortest lifetime your client
+   tolerates, map web principals only to the nodes they need, and to cut off a
+   leaked token revoke the Access session and remove the principal mapping.
 6. Complete the actual ChatGPT login and call `list_devices`. Verify only the
    mapped devices appear, exercise a harmless allowed-node identity call, and
    verify an unmapped node is denied. Test logout/revocation and refresh through
