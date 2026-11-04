@@ -230,6 +230,7 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		case limit.slots <- struct{}{}:
 			defer func() { <-limit.slots }()
 		case <-ctx.Done():
+			h.auditDenied("mcp", "principal_busy")
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "principal has too many active requests; retry", 503)
 			return
@@ -238,6 +239,7 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		case h.requests <- struct{}{}:
 			defer func() { <-h.requests }()
 		case <-ctx.Done():
+			h.auditDenied("mcp", "hub_busy")
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "hub has too many active requests; retry", 503)
 			return

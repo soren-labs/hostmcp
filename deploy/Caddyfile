@@ -1,6 +1,21 @@
 # Set HOSTMCP_DOMAIN to the same hostname as the Hub public-url.
 # Example: HOSTMCP_DOMAIN=mcp.example.com caddy run --config deploy/Caddyfile
 {$HOSTMCP_DOMAIN} {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 20mb
+            roll_keep 5
+        }
+        format filter {
+            wrap json
+            fields {
+                request>headers>Authorization delete
+                request>headers>Cf-Access-Jwt-Assertion delete
+                request>headers>Cookie delete
+                resp_headers>Set-Cookie delete
+            }
+        }
+    }
     reverse_proxy 127.0.0.1:8787 {
         flush_interval -1
     }

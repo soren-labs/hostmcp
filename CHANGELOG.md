@@ -32,6 +32,10 @@ are generated from the matching section of this file.
 
 - Updater tests no longer fail when the developer's umask is `002`, which is
   common on Ubuntu. The updater itself still rejects group-writable directories.
+- Static MCP tool capability (`tools.listChanged: false`) so SEP-2575 (`2026-07-28`)
+  clients such as Claude Web do not hold open long-lived `subscriptions/listen`
+  streams and exhaust per-principal concurrency slots; sampled `principal_busy` /
+  `hub_busy` audit events on HTTP 503 and sanitized Caddy access log template.
 
 ## v0.2.3 — 2026-10-28
 

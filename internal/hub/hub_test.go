@@ -123,7 +123,9 @@ func mcpClient(t *testing.T, url, token, version string) *mcp.ClientSession {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	c := mcp.NewClient(&mcp.Implementation{Name: "hostmcp-test", Version: "1"}, nil)
+	c := mcp.NewClient(&mcp.Implementation{Name: "hostmcp-test", Version: "1"}, &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {},
+	})
 	s, err := c.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{token}}, MaxRetries: -1, DisableStandaloneSSE: true}, &mcp.ClientSessionOptions{ProtocolVersion: version})
 	if err != nil {
 		t.Fatal(err)
@@ -205,6 +207,39 @@ func TestSDKProtocolVersionsAndScopes(t *testing.T) {
 			bad, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": "dev1"}})
 			if err != nil || !bad.IsError || before != exec.calls.Load() {
 				t.Fatalf("schema validation failed: %+v %v", bad, err)
+			}
+			// Verify that >4 concurrent 2026-07-28 client sessions with
+			// ToolListChangedHandler do not leak hanging subscriptions/listen
+			// streams or exhaust the 4-slot per-principal concurrency limit.
+			if version == "2026-07-28" {
+				for i := 0; i < 6; i++ {
+					s := mcpClient(t, srv.URL, aliceToken, version)
+					res, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": "dev1", "text": "slot-check"}})
+					if err != nil || res.IsError {
+						t.Fatalf("session %d failed: res=%+v err=%v", i, res, err)
+					}
+				}
+				// Even if a client explicitly sends subscriptions/listen (e.g.
+				// with cached capabilities), it must complete immediately
+				// rather than hanging a concurrency slot.
+				for i := 0; i < 6; i++ {
+					listenBody := `{"jsonrpc":"2.0","id":1,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+					req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/mcp", strings.NewReader(listenBody))
+					req.Header.Set("Authorization", "Bearer "+aliceToken)
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("Accept", "application/json, text/event-stream")
+					req.Header.Set("Mcp-Protocol-Version", "2026-07-28")
+					req.Header.Set("Mcp-Method", "subscriptions/listen")
+					resp, err := http.DefaultClient.Do(req)
+					if err != nil {
+						t.Fatalf("explicit subscriptions/listen %d error: %v", i, err)
+					}
+					_, _ = io.ReadAll(resp.Body)
+					resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						t.Fatalf("explicit subscriptions/listen %d status=%d", i, resp.StatusCode)
+					}
+				}
 			}
 		})
 	}

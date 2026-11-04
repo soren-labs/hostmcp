@@ -96,6 +96,12 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
    The origin accepts a valid assertion even if Authorization is absent or empty.
    Do not paste an opaque OAuth bearer into `--oauth-file` or provision it as a
    static Hub token.
+   For web MCP clients (such as ChatGPT Web and Claude Web) that do not always
+   auto-refresh short-lived Managed OAuth `access_token` grants in the background,
+   configure the Access application's top-level `session_duration` and
+   `oauth_configuration.grant.session_duration` (for example `8760h`) and
+   `oauth_configuration.grant.access_token_lifetime` (up to `720h`) via the
+   Cloudflare API/CLI so active sessions do not expire after the 15-minute default.
 6. Complete the actual ChatGPT login and call `list_devices`. Verify only the
    mapped devices appear, exercise a harmless allowed-node identity call, and
    verify an unmapped node is denied. Test logout/revocation and refresh through
