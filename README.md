@@ -69,6 +69,12 @@ too. Builds and other heavy work happen on the device you pick.
 On a remote Hub every device tool takes a `device` argument with the node ID from
 `list_devices`. In local `stdio` mode the tools act on the current machine.
 
+For non-PTY `exec_command`, `yield_time_ms` waits for the command to finish or for
+that interval to elapse (default 1000 ms; zero returns immediately). PTYs and
+`write_stdin` return when output is available; filling the output budget also
+returns early. A still-running command keeps its session for later polling.
+`timeout_seconds` controls the command's execution lifetime separately.
+
 ## Install
 
 Pre-built binaries for Linux and macOS (amd64, arm64) are on the
