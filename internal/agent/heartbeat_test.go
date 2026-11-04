@@ -38,9 +38,6 @@ func (b *lockedBuffer) String() string {
 // must be reported as a heartbeat failure, not as the misleading
 // "use of closed network connection" produced when the ping closes the socket.
 func TestHeartbeatFailureIsLoggedAsHeartbeat(t *testing.T) {
-	previousInterval, previousTimeout := heartbeatInterval, heartbeatTimeout
-	heartbeatInterval, heartbeatTimeout = 50*time.Millisecond, 100*time.Millisecond
-	t.Cleanup(func() { heartbeatInterval, heartbeatTimeout = previousInterval, previousTimeout })
 	logs := &lockedBuffer{}
 	previousLog := log.Writer()
 	log.SetOutput(logs)
@@ -74,7 +71,7 @@ func TestHeartbeatFailureIsLoggedAsHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: "0123456789012345678901234567890123456789012"}, &counterExecutor{}, protocol.Device{})
+		done <- runWithHeartbeat(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: "0123456789012345678901234567890123456789012"}, &counterExecutor{}, protocol.Device{}, 50*time.Millisecond, 100*time.Millisecond)
 	}()
 	deadline := time.Now().Add(3 * time.Second)
 	for !strings.Contains(logs.String(), "disconnected; reconnecting") && time.Now().Before(deadline) {
