@@ -174,7 +174,7 @@ func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInpu
 			if s == nil {
 				return protocol.Result{}, fmt.Errorf("request_id already executed as session %s; its output session was recycled and the command will not be replayed", rec.SessionID)
 			}
-			out, e := s.poll(ctx, yield, maxOut)
+			out, e := s.poll(ctx, yield, maxOut, waitForExit)
 			if e != nil {
 				return protocol.Result{}, e
 			}
@@ -297,7 +297,7 @@ func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInpu
 			}
 		}()
 	}
-	out, err := s.poll(ctx, yield, maxOut)
+	out, err := s.poll(ctx, yield, maxOut, waitForExit)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -501,14 +501,22 @@ func (s *session) drainLocked(max int) map[string]any {
 	s.dropped = 0
 	return out
 }
-func (s *session) poll(ctx context.Context, yield time.Duration, max int) (map[string]any, error) {
+
+type pollMode uint8
+
+const (
+	waitForOutput pollMode = iota
+	waitForExit
+)
+
+func (s *session) poll(ctx context.Context, yield time.Duration, max int, mode pollMode) (map[string]any, error) {
 	if err := s.acquire(ctx); err != nil {
 		return nil, fmt.Errorf("session %s remains available: %w", s.id, err)
 	}
 	defer s.release()
-	return s.pollLocked(ctx, yield, max)
+	return s.pollLocked(ctx, yield, max, mode)
 }
-func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int) (map[string]any, error) {
+func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int, mode pollMode) (map[string]any, error) {
 	t := time.NewTimer(yield)
 	defer t.Stop()
 	for {
@@ -516,7 +524,13 @@ func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int) 
 			return nil, fmt.Errorf("session %s remains available; call cancellation does not stop the command: %w", s.id, err)
 		}
 		s.mu.Lock()
-		ready := len(s.pending) > 0 && completeUTF8Prefix(s.pending) > 0 || !s.finishedAt.IsZero()
+		// exec_command should collect a short command's complete result, not
+		// return on its first banner while the process is still running. PTYs
+		// and write_stdin return on readable output so prompts remain responsive.
+		// A full output budget also yields early instead of accumulating output
+		// for the whole wait and needlessly overflowing the bounded buffer.
+		readable := len(s.pending) > 0 && completeUTF8Prefix(s.pending) > 0
+		ready := !s.finishedAt.IsZero() || readable && (mode == waitForOutput || s.tty || len(s.pending) >= max)
 		if ready || yield == 0 {
 			out := s.drainLocked(max)
 			s.mu.Unlock()
@@ -626,7 +640,7 @@ func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInpu
 			}
 		}
 	}
-	out, err := s.pollLocked(ctx, yield, max)
+	out, err := s.pollLocked(ctx, yield, max, waitForOutput)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -704,7 +718,7 @@ func (r *Runtime) terminate(ctx context.Context, principal string, in TerminateI
 		return protocol.Result{}, fmt.Errorf("stop requested for session %s: %w", s.id, ctx.Err())
 	case <-time.After(2 * time.Second):
 	}
-	out, err := s.poll(ctx, 0, 65536)
+	out, err := s.poll(ctx, 0, 65536, waitForOutput)
 	if err != nil {
 		return protocol.Result{}, err
 	}
