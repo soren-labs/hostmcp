@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func callBounded(handler http.Handler, token string) int {
@@ -20,9 +23,26 @@ func callBounded(handler http.Handler, token string) int {
 	return w.Code
 }
 
-func captureLog(t *testing.T) *bytes.Buffer {
+type lockedLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func captureLog(t *testing.T) *lockedLogBuffer {
 	t.Helper()
-	var out bytes.Buffer
+	var out lockedLogBuffer
 	previous := log.Writer()
 	log.SetOutput(&out)
 	t.Cleanup(func() { log.SetOutput(previous) })
@@ -73,6 +93,13 @@ func TestRequestDeadlineReleasesParkedSlots(t *testing.T) {
 // streams through the SDK's default capabilities.
 func TestSubscriptionsListenForAllKindsReturnsImmediately(t *testing.T) {
 	_, srv, _ := fixture(t)
+	session := mcpClient(t, srv.URL, aliceToken, "2026-07-28")
+	caps := session.InitializeResult().Capabilities
+	if caps.Tools == nil || caps.Tools.ListChanged ||
+		(caps.Prompts != nil && caps.Prompts.ListChanged) ||
+		(caps.Resources != nil && (caps.Resources.ListChanged || caps.Resources.Subscribe)) {
+		t.Fatalf("Hub must advertise static capabilities: %+v", caps)
+	}
 	body := `{"jsonrpc":"2.0","id":1,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true,"promptsListChanged":true,"resourcesListChanged":true,"resourceSubscriptions":["file:///etc/hostname"]},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(body))
 	if err != nil {
@@ -89,12 +116,105 @@ func TestSubscriptionsListenForAllKindsReturnsImmediately(t *testing.T) {
 		t.Fatalf("subscriptions/listen did not complete promptly: %v", err)
 	}
 	defer resp.Body.Close()
-	if _, err := io.ReadAll(resp.Body); err != nil {
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
 		t.Fatalf("subscriptions/listen stream stayed open: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("subscriptions/listen status=%d", resp.StatusCode)
 	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("subscriptions/listen did not return SSE: %s", data)
+	}
+	// A 200 response alone does not prove that the request was understood:
+	// require the actual acknowledgement with every requested kind disabled.
+	acked, completed := false, false
+	for _, line := range strings.Split(string(data), "\n") {
+		payload, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		var msg struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+			Result json.RawMessage `json:"result"`
+			Error  json.RawMessage `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(payload), &msg); err != nil || len(msg.Error) > 0 {
+			t.Fatalf("invalid subscription response: %s (%v)", payload, err)
+		}
+		if msg.Method == "notifications/subscriptions/acknowledged" {
+			var ack mcp.SubscriptionsAcknowledgedParams
+			if err := json.Unmarshal(msg.Params, &ack); err != nil {
+				t.Fatal(err)
+			}
+			n := ack.Notifications
+			if n.ToolsListChanged || n.PromptsListChanged || n.ResourcesListChanged || len(n.ResourceSubscriptions) != 0 {
+				t.Fatalf("unexpected active subscriptions: %+v", n)
+			}
+			acked = true
+		}
+		if string(msg.ID) == "1" && len(msg.Result) > 0 {
+			completed = true
+		}
+	}
+	if !acked || !completed {
+		t.Fatalf("expected subscription acknowledgement and completion: %s", data)
+	}
+}
+
+// Exercise the actual SDK cancellation path as well as the synthetic parked
+// handler above. If a future capability enables subscriptions, the HTTP request
+// and SDK session must still unwind when the Hub cancels their context.
+func TestRequestDeadlineReleasesSDKSubscription(t *testing.T) {
+	h, _, _ := fixture(t)
+	h.requestDeadline = 300 * time.Millisecond
+	server := mcp.NewServer(&mcp.Implementation{Name: "deadline-test", Version: "1"}, &mcp.ServerOptions{
+		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
+	})
+	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
+		Stateless: true, JSONResponse: true, PropagateRequestCancellation: true,
+	})
+	bounded := h.boundedClient(streamable)
+	finished := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bounded.ServeHTTP(w, r)
+		close(finished)
+	}))
+	t.Cleanup(srv.Close)
+	body := `{"jsonrpc":"2.0","id":1,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+aliceToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Protocol-Version", "2026-07-28")
+	req.Header.Set("Mcp-Method", "subscriptions/listen")
+	client := &http.Client{Timeout: 2 * time.Second}
+	started := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	// At expiry the connection may close before a final SSE frame can be
+	// flushed. What matters is the positive ACK, then prompt slot release.
+	data, _ := io.ReadAll(resp.Body)
+	if time.Since(started) > time.Second {
+		t.Fatal("subscription outlived the Hub deadline and required client cancellation")
+	}
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(data, []byte(`"toolsListChanged":true`)) {
+		t.Fatalf("SDK did not open a real subscription: status=%d body=%s", resp.StatusCode, data)
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("SDK subscription did not release its request after expiry")
+	}
+	assertClientSlotsReleased(t, h)
 }
 
 // One noisy event kind, such as a stale agent retrying a revoked credential,

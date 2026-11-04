@@ -61,13 +61,11 @@ type Hub struct {
 	auditSuppressed map[string]int64
 }
 
-// defaultRequestDeadline ends any admitted /mcp request, and releases its
-// concurrency slots, even when a handler would otherwise wait for the client
-// to cancel. A SEP-2575 subscriptions/listen stream parks like this whenever a
-// capability with listChanged or subscribe is advertised; before tools were
-// made static, four such streams locked a principal out for half an hour.
-// It exceeds Call's 45s dispatch deadline and stays inside the server's 50s
-// WriteTimeout, so normal tool results are unaffected.
+// defaultRequestDeadline cancels admitted /mcp requests and interrupts their
+// network I/O. Context-aware handlers such as SEP-2575 subscriptions/listen then
+// release their concurrency slots. This cannot preempt arbitrary handler code
+// that ignores cancellation. It exceeds Call's 45s dispatch deadline and stays
+// inside the server's 50s WriteTimeout.
 const defaultRequestDeadline = 48 * time.Second
 
 // defaultAuditEvery limits each audit event kind to one log line per interval.
@@ -292,11 +290,36 @@ func (h *Hub) boundedClient(next http.Handler) http.Handler {
 		}
 		requestCtx, cancelRequest := context.WithTimeout(r.Context(), h.requestDeadline)
 		defer cancelRequest()
+		stopIO := interruptRequestIO(requestCtx, w)
+		defer stopIO()
 		next.ServeHTTP(w, r.WithContext(requestCtx))
 		if errors.Is(requestCtx.Err(), context.DeadlineExceeded) {
 			h.audit("mcp_deadline", "mcp", "request_deadline")
 		}
 	})
+}
+
+// Cancelling a context alone does not unblock net/http request-body reads or
+// response writes. Expire the connection's I/O deadlines when cancellation
+// happens, without extending the server's existing (possibly shorter) limits.
+// The returned cleanup stops or joins the callback before ServeHTTP returns, so
+// it cannot change deadlines on a connection already reused for another request.
+func interruptRequestIO(ctx context.Context, w http.ResponseWriter) func() {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		rc := http.NewResponseController(w)
+		now := time.Now()
+		// Plain net/http writers support these methods. Recorders or wrappers
+		// without Unwrap may not; context cancellation still applies to them.
+		_ = rc.SetReadDeadline(now)
+		_ = rc.SetWriteDeadline(now)
+	})
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
 }
 
 func (h *Hub) protect(next http.Handler) http.Handler {
