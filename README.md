@@ -83,8 +83,8 @@ picks the right archive, verifies its SHA-256 and installs to `~/.local/bin`:
 
 ```sh
 curl -fsSLo hostmcp-install.sh \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.3/scripts/install.sh
-sh hostmcp-install.sh --version v0.2.3
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.4/scripts/install.sh
+sh hostmcp-install.sh --version v0.2.4
 export PATH="$HOME/.local/bin:$PATH"
 hostmcp version
 ```
@@ -207,7 +207,7 @@ internet. Report vulnerabilities privately as described in [SECURITY.md](SECURIT
 
 ## Status and limitations
 
-The latest release is [v0.2.3](https://github.com/soren-labs/hostmcp/releases/latest).
+The latest release is [v0.2.4](https://github.com/soren-labs/hostmcp/releases/latest).
 HostMCP is pre-1.0: it serves one owner or one trust domain, and minor versions
 may change behavior. Each [validation record](docs/validation/README.md) lists
 exactly what was tested, on which machines and with which clients.

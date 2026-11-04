@@ -78,8 +78,8 @@ Linux 和 macOS（amd64、arm64）的预编译版本在
 
 ```sh
 curl -fsSLo hostmcp-install.sh \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.3/scripts/install.sh
-sh hostmcp-install.sh --version v0.2.3
+  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.4/scripts/install.sh
+sh hostmcp-install.sh --version v0.2.4
 export PATH="$HOME/.local/bin:$PATH"
 hostmcp version
 ```
@@ -195,7 +195,7 @@ hostmcp service install --role agent --config ~/.config/hostmcp/agent.json --nam
 
 ## 状态与限制
 
-最新版本是 [v0.2.3](https://github.com/soren-labs/hostmcp/releases/latest)。
+最新版本是 [v0.2.4](https://github.com/soren-labs/hostmcp/releases/latest)。
 HostMCP 尚未到 1.0：面向单个所有者或单个信任域，minor 版本之间可能有行为变化。
 每份[验证记录](docs/validation/README.md)都写明了实际测试的内容、机器和客户端。
 

@@ -5,7 +5,7 @@ All notable changes to HostMCP are recorded here. Versions follow
 include breaking changes and are called out explicitly. Release notes on GitHub
 are generated from the matching section of this file.
 
-## Unreleased
+## v0.2.4 — 2026-11-04
 
 ### Repository
 
