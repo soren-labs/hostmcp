@@ -90,10 +90,13 @@ Pre-built binaries for Linux and macOS (amd64, arm64) are on the
 [releases page](https://github.com/soren-labs/roost/releases). The installer
 picks the right archive, verifies its SHA-256 and installs to `~/.local/bin`:
 
+Roost releases start at v0.3.0. Releases up to v0.2.4 were published as HostMCP
+and install `hostmcp` binaries; see [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
+
 ```sh
 curl -fsSLo roost-install.sh \
-  https://raw.githubusercontent.com/soren-labs/roost/v0.2.4/scripts/install.sh
-sh roost-install.sh --version v0.2.4
+  https://raw.githubusercontent.com/soren-labs/roost/v0.3.0/scripts/install.sh
+sh roost-install.sh --version v0.3.0
 export PATH="$HOME/.local/bin:$PATH"
 roost version
 ```
@@ -216,7 +219,7 @@ internet. Report vulnerabilities privately as described in [SECURITY.md](SECURIT
 
 ## Status and limitations
 
-The latest release is [v0.2.4](https://github.com/soren-labs/roost/releases/latest).
+See the [latest release](https://github.com/soren-labs/roost/releases/latest).
 Roost is pre-1.0: it serves one owner or one trust domain, and minor versions
 may change behavior. Each [validation record](docs/validation/README.md) lists
 exactly what was tested, on which machines and with which clients.

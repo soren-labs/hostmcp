@@ -9,8 +9,8 @@ import (
 
 // Services installed before the project was renamed from HostMCP keep their
 // original unit names, launchd labels, log directories and file markers. Roost
-// still recognises them so existing deployments can be inspected, reinstalled
-// in place and removed without a manual cleanup step.
+// still recognises them so existing services can be removed and reinstalled
+// under the same name without a manual cleanup step.
 const (
 	namePrefix   = "roost-"
 	legacyPrefix = "hostmcp-"

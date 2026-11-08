@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to HostMCP are recorded here. Versions follow
+All notable changes to Roost (named HostMCP up to v0.2.4) are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/); before 1.0, minor versions may
 include breaking changes and are called out explicitly. Release notes on GitHub
 are generated from the matching section of this file.

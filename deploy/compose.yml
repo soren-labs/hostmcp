@@ -12,7 +12,9 @@ services:
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
-      - roost-state:/state
+      # Keeps the volume name used before the HostMCP -> Roost rename so
+      # existing deployments recreate the container with their hub.json.
+      - hostmcp-state:/state
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
@@ -23,4 +25,4 @@ services:
     stop_grace_period: 15s
 
 volumes:
-  roost-state:
+  hostmcp-state:

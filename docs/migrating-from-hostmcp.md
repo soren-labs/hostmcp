@@ -24,17 +24,34 @@ Explicit `--config` paths are never rewritten, so services that already pass
 
 ## Upgrading an existing node
 
-The least disruptive path keeps your service name and config path:
+The least disruptive path keeps your service name and config path. The
+installer never overwrites an existing unit or plist, so remove the old
+service first and then install it again under the same name, scope and
+account. Run both steps with the new binary you installed (`roost-agent` for
+an Agent, `roost-hub` for a Hub, or the all-in-one `roost`); every role binary
+includes the `service` command.
 
-1. Install the new binary next to the old one, for example
-   `/usr/local/bin/roost-agent`.
-2. Re-render the existing service with the same name so it points at the new
-   binary: `roost service install --role agent --name hostmcp-agent-NAME --config EXISTING.json`
-   (add `--system --user USER` for system services).
-3. Check `list_devices` from an MCP client: the node reports the new version.
+1. Install the new binary, for example to `~/.local/bin/roost-agent` with
+   `scripts/install.sh --role agent`, or to `/usr/local/bin/roost-agent`.
+2. Remove the existing service. Roost recognises the `hostmcp-…` name and the
+   `Managed by HostMCP` marker:
+   `roost-agent service uninstall --name hostmcp-agent-NAME`
+   (add `--system` for a system service).
+3. Install it again with the same name and the existing config file:
+   `roost-agent service install --role agent --name hostmcp-agent-NAME --config EXISTING.json`
+   (add `--system --user USER` for a system service). On macOS the service keeps
+   its `com.hostmcp.hostmcp-agent-NAME` label and `Library/Logs/HostMCP` log path.
+4. Check `list_devices` from an MCP client: the node reports the new version.
 
-You can rename the service to `roost-…` and move the config to
-`~/.config/roost/` later, at your own pace.
+Managed sessions on that node end when its Agent restarts. You can switch the
+service to a `roost-…` name and move the config to `~/.config/roost/` later,
+at your own pace.
+
+## Docker Compose Hub
+
+`deploy/compose.yml` keeps the volume name `hostmcp-state`, so recreating the
+container after the upgrade mounts the existing `/state/hub.json` and
+credentials.
 
 ## Agents that self-update
 

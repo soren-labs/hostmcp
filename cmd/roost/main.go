@@ -685,7 +685,7 @@ func serviceCommand(args []string) error {
 	f := flags("service " + args[0])
 	role := f.String("role", "", "hub or agent")
 	path := f.String("config", "", "absolute configuration path")
-	name := f.String("name", "", "service name starting with roost-")
+	name := f.String("name", "", "service name starting with roost- (or an existing hostmcp- name)")
 	system := f.Bool("system", false, "install or remove a system service (requires root)")
 	user := f.String("user", "", "OS account for a system service; requires --system")
 	if err := parse(f, args[1:]); err != nil {

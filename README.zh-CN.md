@@ -84,10 +84,13 @@ Linux 和 macOS（amd64、arm64）的预编译版本在
 [Releases 页面](https://github.com/soren-labs/roost/releases)。安装脚本会选择
 对应的归档、校验 SHA-256，并安装到 `~/.local/bin`：
 
+Roost 的发布从 v0.3.0 开始。v0.2.4 及以前以 HostMCP 名义发布，安装的是 `hostmcp`
+可执行文件，详见[从 HostMCP 迁移](docs/migrating-from-hostmcp.md)。
+
 ```sh
 curl -fsSLo roost-install.sh \
-  https://raw.githubusercontent.com/soren-labs/roost/v0.2.4/scripts/install.sh
-sh roost-install.sh --version v0.2.4
+  https://raw.githubusercontent.com/soren-labs/roost/v0.3.0/scripts/install.sh
+sh roost-install.sh --version v0.3.0
 export PATH="$HOME/.local/bin:$PATH"
 roost version
 ```
@@ -203,7 +206,7 @@ roost service install --role agent --config ~/.config/roost/agent.json --name ro
 
 ## 状态与限制
 
-最新版本是 [v0.2.4](https://github.com/soren-labs/roost/releases/latest)。
+最新版本见 [Releases](https://github.com/soren-labs/roost/releases/latest)。
 Roost 尚未到 1.0：面向单个所有者或单个信任域，minor 版本之间可能有行为变化。
 每份[验证记录](docs/validation/README.md)都写明了实际测试的内容、机器和客户端。
 
