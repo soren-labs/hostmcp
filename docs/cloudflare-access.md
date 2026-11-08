@@ -1,7 +1,7 @@
 # Cloudflare Access Managed OAuth for RMC Hub
 
-RMC v0.2.3 adds an optional **Hub-only** backend identity mode for Cloudflare
-Access. ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
+RMC supports an optional **Hub-only** backend identity mode for Cloudflare
+Access (introduced in HostMCP v0.2.3). ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
 Access handles authorization code/PKCE, login and OAuth token issuance at the edge.
 The Hub validates the signed `Cf-Access-Jwt-Assertion` forwarded to the origin.
 Agent configuration, device credentials, native authority and wire version 1 do

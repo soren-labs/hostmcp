@@ -1,7 +1,8 @@
 # Hub and Agent lifecycle
 
-The v0.2.2 baseline keeps `rmc` as the original compatibility binary and adds
-`rmc-hub` and `rmc-agent` artifacts. All variants share Go source and may share a
+RMC ships `rmc` as the all-in-one compatibility binary plus separate `rmc-hub`
+and `rmc-agent` artifacts (introduced in HostMCP v0.2.2 as `hostmcp`,
+`hostmcp-hub` and `hostmcp-agent`). All variants share Go source and may share a
 release tag; each has a separate archive, destination path and deployment lifecycle.
 
 | Artifact | Commands | Upgrade when |
