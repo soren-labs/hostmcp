@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
-	"github.com/soren-labs/hostmcp/internal/cloudflareaccess"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/oauth"
+	"github.com/soren-labs/roost/internal/cloudflareaccess"
+	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/roost/internal/oauth"
 )
 
 type tokenInfoKey struct{}
@@ -77,7 +77,7 @@ func (h *Hub) accessConfigured(cfg config.Hub) bool {
 	return h.access != nil && h.access.Matches(cfg.CloudflareAccess) && strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp" == h.accessResource
 }
 func (h *Hub) challenge(w http.ResponseWriter, code int) {
-	challenge := `Bearer realm="hostmcp"`
+	challenge := `Bearer realm="roost"`
 	if h.oauth != nil {
 		challenge += `, resource_metadata="` + h.metadataURL + `", scope="` + strings.Join(h.oauthScopes, " ") + `"`
 	}

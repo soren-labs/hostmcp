@@ -43,13 +43,13 @@ jobs:
       - name: Test with race detector
         run: go test -race -count=1 ./...
       - name: Build native executable
-        run: go build -trimpath -o build/hostmcp ./cmd/hostmcp
+        run: go build -trimpath -o build/roost ./cmd/roost
       - name: Smoke test stdio CLI and nine native tools
-        run: python3 scripts/smoke.py --binary ./build/hostmcp --mode stdio
+        run: python3 scripts/smoke.py --binary ./build/roost --mode stdio
       - name: Inspect version and local environment
         run: |
-          ./build/hostmcp version
-          ./build/hostmcp doctor
+          ./build/roost version
+          ./build/roost doctor
 
   lint:
     runs-on: ubuntu-latest

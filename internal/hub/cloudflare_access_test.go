@@ -17,11 +17,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/hostmcp/internal/cloudflareaccess"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/host"
-	"github.com/soren-labs/hostmcp/internal/protocol"
-	"github.com/soren-labs/hostmcp/internal/testutil"
+	"github.com/soren-labs/roost/internal/cloudflareaccess"
+	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/roost/internal/host"
+	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/roost/internal/testutil"
 )
 
 const accessResource = "https://mcp.example/mcp"

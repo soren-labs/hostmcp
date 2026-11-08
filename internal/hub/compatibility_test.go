@@ -10,9 +10,9 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/soren-labs/hostmcp/internal/oauth"
-	"github.com/soren-labs/hostmcp/internal/protocol"
-	"github.com/soren-labs/hostmcp/internal/testutil"
+	"github.com/soren-labs/roost/internal/oauth"
+	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/roost/internal/testutil"
 )
 
 func TestCompatibilityLegacyAgentWithOAuthHub(t *testing.T) {

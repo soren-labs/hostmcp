@@ -1,0 +1,17 @@
+# User unit: ~/.config/systemd/user/roost-hub.service
+# Prefer `roost service install` to render the actual executable/config paths.
+[Unit]
+Description=Roost Hub
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/roost hub serve --config %h/.config/roost/hub.json
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

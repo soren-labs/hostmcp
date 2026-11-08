@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/soren-labs/hostmcp/internal/testutil"
+	"github.com/soren-labs/roost/internal/testutil"
 )
 
 func TestOAuthJWTValidation(t *testing.T) {

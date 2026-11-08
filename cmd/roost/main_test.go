@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soren-labs/hostmcp/internal/config"
+	"github.com/soren-labs/roost/internal/config"
 )
 
 func testHub(t *testing.T) (string, *config.Store) {
@@ -151,5 +151,33 @@ func TestDeviceInviteBindsExpectedAccount(t *testing.T) {
 	agent, err := store.Redeem(invite.DeviceID, invite.Token)
 	if err != nil || agent.ExpectedUser != "root" {
 		t.Fatalf("enrollment did not preserve expected account: %v", err)
+	}
+}
+
+func TestDefaultFileFallsBackToLegacyHostMCPDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	current := filepath.Join(home, ".config", "roost", "agent.json")
+	legacy := filepath.Join(home, ".config", "hostmcp", "agent.json")
+	if got := defaultFile("agent.json"); got != current {
+		t.Fatalf("fresh install default = %q, want %q", got, current)
+	}
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultFile("agent.json"); got != legacy {
+		t.Fatalf("legacy-only default = %q, want %q", got, legacy)
+	}
+	if err := os.MkdirAll(filepath.Dir(current), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultFile("agent.json"); got != current {
+		t.Fatalf("both present default = %q, want %q", got, current)
 	}
 }

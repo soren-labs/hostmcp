@@ -193,11 +193,11 @@ func TestConfigurationLockRejectsSymlink(t *testing.T) {
 // This helper is executed as a real unprivileged account by the root-only test
 // below. Keeping it in a subprocess avoids changing the test runner's UID.
 func TestConfigurationOwnershipHelper(t *testing.T) {
-	path := os.Getenv("HOSTMCP_TEST_OWNER_PATH")
+	path := os.Getenv("ROOST_TEST_OWNER_PATH")
 	if path == "" {
 		return
 	}
-	switch os.Getenv("HOSTMCP_TEST_OWNER_ACTION") {
+	switch os.Getenv("ROOST_TEST_OWNER_ACTION") {
 	case "update":
 		s := NewStore(path)
 		if _, err := s.Snapshot(); err != nil {
@@ -232,7 +232,7 @@ func TestRootUpdatePreservesConfigurationOwnership(t *testing.T) {
 	if err != nil {
 		t.Skipf("unprivileged test GID unavailable: %v", err)
 	}
-	base, err := os.MkdirTemp("", "hostmcp-ownership-")
+	base, err := os.MkdirTemp("", "roost-ownership-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestRootUpdatePreservesConfigurationOwnership(t *testing.T) {
 		t.Helper()
 		cmd := exec.Command(binary, "-test.run=^TestConfigurationOwnershipHelper$", "-test.v")
 		cmd.Dir = base
-		cmd.Env = append(os.Environ(), "HOSTMCP_TEST_OWNER_PATH="+path, "HOSTMCP_TEST_OWNER_ACTION="+action)
+		cmd.Env = append(os.Environ(), "ROOST_TEST_OWNER_PATH="+path, "ROOST_TEST_OWNER_ACTION="+action)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), Groups: []uint32{uint32(gid)}}}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("unprivileged %s: %v\n%s", action, err, out)

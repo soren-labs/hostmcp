@@ -15,8 +15,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/roost/internal/protocol"
 )
 
 const maxConcurrentRequests = 16

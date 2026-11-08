@@ -109,10 +109,20 @@ func inMemorySession(t *testing.T, ctx context.Context, server *mcp.Server, vers
 
 func TestTokenEnvironmentAndResponseLimit(t *testing.T) {
 	for _, secret := range []string{strings.Repeat("a", 1025), strings.Repeat("a", 32) + " b", strings.Repeat("a", 32) + "\nother"} {
-		t.Setenv("HOSTMCP_TOKEN", secret)
+		t.Setenv("ROOST_TOKEN", secret)
 		if _, err := Token(""); err == nil {
 			t.Fatal("malformed credential accepted")
 		}
+	}
+	current, legacy := strings.Repeat("r", 40), strings.Repeat("h", 40)
+	t.Setenv("ROOST_TOKEN", "")
+	t.Setenv("HOSTMCP_TOKEN", legacy)
+	if got, err := Token(""); err != nil || got != legacy {
+		t.Fatalf("legacy HOSTMCP_TOKEN fallback: %q %v", got, err)
+	}
+	t.Setenv("ROOST_TOKEN", current)
+	if got, err := Token(""); err != nil || got != current {
+		t.Fatalf("ROOST_TOKEN must take precedence: %q %v", got, err)
 	}
 	b := &boundedBody{ReadCloser: io.NopCloser(strings.NewReader("123456")), remaining: 5}
 	out, err := io.ReadAll(b)

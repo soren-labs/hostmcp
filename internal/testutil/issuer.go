@@ -79,7 +79,7 @@ func (i *Issuer) Install(t *testing.T) {
 	t.Cleanup(func() { http.DefaultTransport = previous })
 }
 func (i *Issuer) Claims(subject, resource string) jwt.MapClaims {
-	return jwt.MapClaims{"client_id": "test-client", "iss": i.URL, "sub": subject, "aud": resource, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Add(-time.Minute).Unix(), "scope": "hostmcp:tools"}
+	return jwt.MapClaims{"client_id": "test-client", "iss": i.URL, "sub": subject, "aud": resource, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Add(-time.Minute).Unix(), "scope": "roost:tools"}
 }
 func (i *Issuer) Sign(t *testing.T, claims jwt.MapClaims) string {
 	t.Helper()

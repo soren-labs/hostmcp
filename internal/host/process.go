@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/creack/pty"
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/roost/internal/protocol"
 )
 
 type ExecInput struct {

@@ -1,23 +1,32 @@
-# HostMCP
+# Roost
 
-[![CI](https://github.com/soren-labs/hostmcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/soren-labs/hostmcp/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/soren-labs/hostmcp)](https://github.com/soren-labs/hostmcp/releases/latest)
-[![Go](https://img.shields.io/github/go-mod/go-version/soren-labs/hostmcp)](go.mod)
+[![CI](https://github.com/soren-labs/roost/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/soren-labs/roost/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/soren-labs/roost)](https://github.com/soren-labs/roost/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/soren-labs/roost)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**One MCP endpoint for all of your Linux and macOS machines.**
+**Give any AI client a shell on your own machines — from the browser, your phone or the terminal.**
 
 [简体中文](README.zh-CN.md)
 
-HostMCP is a self-hosted [Model Context Protocol](https://modelcontextprotocol.io/)
-server that lets AI agents such as Claude Code, Codex and ChatGPT run commands and
-edit files on your own machines. A small Go **Hub** authenticates MCP clients and
-routes each tool call to a native **Agent** on the chosen machine. Agents connect
-out to the Hub, so your laptop, home server or VPS needs no public IP or open port.
+Roost is a self-hosted [Model Context Protocol](https://modelcontextprotocol.io/)
+gateway. Add one URL as a connector and AI clients such as Claude, ChatGPT,
+Codex and Claude Code can run commands and edit files on every Linux and macOS
+machine you enroll: your laptop, a home server, a fleet of VPSes.
+
+It is built for the case local MCP servers cannot cover. A chat in a web or
+mobile app cannot launch a process on your computer, and SSH-based MCP servers
+need a reachable port on every target. With Roost, each machine runs a small
+**Agent** that connects *out* to your **Hub** — the machines come home to roost
+— so nothing needs a public IP or an open inbound port. The Hub authenticates
+clients and routes each tool call to the machine you pick.
 
 Each Agent acts as the OS account that runs it: real paths, your shell and
 environment, normal Unix permissions. No containers, no directory allowlists,
 no Node.js or Electron on the devices.
+
+> Roost was called **HostMCP** up to v0.2.4. Existing installations keep
+> working; see [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
 
 ## Features
 
@@ -29,7 +38,7 @@ no Node.js or Electron on the devices.
 - **Native tools**: shell commands with PTY support, managed long-running
   processes, file read/write, Codex-style `apply_patch`, and image viewing.
 - **Standard MCP**: Streamable HTTP for remote clients, stdio for local use, and a
-  stdio bridge (`hostmcp connect`) for clients that only launch local commands.
+  stdio bridge (`roost connect`) for clients that only launch local commands.
   Built on the official MCP Go SDK.
 - **Client authentication**: per-client bearer tokens, an external OAuth 2.1
   resource server, or Cloudflare Access Managed OAuth assertions.
@@ -43,7 +52,7 @@ no Node.js or Electron on the devices.
 ```mermaid
 flowchart LR
     C["MCP client<br/>Claude Code · Codex · ChatGPT"] -->|"HTTPS /mcp"| E["HTTPS proxy or<br/>Cloudflare Tunnel"]
-    E --> H["HostMCP Hub<br/>auth + routing"]
+    E --> H["Roost Hub<br/>auth + routing"]
     A1["Agent on Ubuntu<br/>(user dev)"] -->|"outbound WebSocket"| H
     A2["Agent on Ubuntu<br/>(root)"] -->|"outbound WebSocket"| H
     A3["Agent on Mac<br/>(user alice)"] -->|"outbound WebSocket"| H
@@ -78,41 +87,41 @@ returns early. A still-running command keeps its session for later polling.
 ## Install
 
 Pre-built binaries for Linux and macOS (amd64, arm64) are on the
-[releases page](https://github.com/soren-labs/hostmcp/releases). The installer
+[releases page](https://github.com/soren-labs/roost/releases). The installer
 picks the right archive, verifies its SHA-256 and installs to `~/.local/bin`:
 
 ```sh
-curl -fsSLo hostmcp-install.sh \
-  https://raw.githubusercontent.com/soren-labs/hostmcp/v0.2.4/scripts/install.sh
-sh hostmcp-install.sh --version v0.2.4
+curl -fsSLo roost-install.sh \
+  https://raw.githubusercontent.com/soren-labs/roost/v0.2.4/scripts/install.sh
+sh roost-install.sh --version v0.2.4
 export PATH="$HOME/.local/bin:$PATH"
-hostmcp version
+roost version
 ```
 
 Use `--role hub` or `--role agent` to install the smaller single-role binaries
-(`hostmcp-hub`, `hostmcp-agent`). The default `hostmcp` binary contains every command.
+(`roost-hub`, `roost-agent`). The default `roost` binary contains every command.
 
 To build from source you need Go 1.25 or newer:
 
 ```sh
-git clone https://github.com/soren-labs/hostmcp.git
-cd hostmcp
-make build            # writes ./build/hostmcp
+git clone https://github.com/soren-labs/roost.git
+cd roost
+make build            # writes ./build/roost
 ```
 
-`go install github.com/soren-labs/hostmcp/cmd/hostmcp@latest` also works; such
+`go install github.com/soren-labs/roost/cmd/roost@latest` also works; such
 builds report a `-dev` version because release metadata is not stamped in.
 
 ## Quick start: one machine
 
-No Hub is needed. Point your MCP client at `hostmcp stdio`; tools run as the user
+No Hub is needed. Point your MCP client at `roost stdio`; tools run as the user
 who starts the client.
 
 ```sh
 # Claude Code
-claude mcp add --transport stdio hostmcp -- "$HOME/.local/bin/hostmcp" stdio
+claude mcp add --transport stdio roost -- "$HOME/.local/bin/roost" stdio
 # Codex CLI
-codex mcp add hostmcp -- "$HOME/.local/bin/hostmcp" stdio
+codex mcp add roost -- "$HOME/.local/bin/roost" stdio
 ```
 
 Clients that use an `mcpServers` JSON file:
@@ -120,7 +129,7 @@ Clients that use an `mcpServers` JSON file:
 ```json
 {
   "mcpServers": {
-    "hostmcp": { "command": "/absolute/path/to/hostmcp", "args": ["stdio"] }
+    "roost": { "command": "/absolute/path/to/roost", "args": ["stdio"] }
   }
 }
 ```
@@ -133,24 +142,24 @@ The example uses `https://mcp.example.com` as the Hub's public HTTPS address. Se
 **1. Create and start the Hub** (on the Hub machine):
 
 ```sh
-hostmcp hub init --public-url https://mcp.example.com \
-  --client-token-file ~/.config/hostmcp/owner.token
-hostmcp hub serve           # listens on 127.0.0.1:8787; put HTTPS in front of it
+roost hub init --public-url https://mcp.example.com \
+  --client-token-file ~/.config/roost/owner.token
+roost hub serve           # listens on 127.0.0.1:8787; put HTTPS in front of it
 ```
 
 **2. Invite a device** (on the Hub machine). `--user` binds the node to the OS
 account it must run as:
 
 ```sh
-hostmcp device invite --id laptop --user alice --output laptop-invite.json
+roost device invite --id laptop --user alice --output laptop-invite.json
 ```
 
 **3. Enroll and run the Agent** (on the device, as that user). Copy the invite
 file over a channel you trust; it is single-use and expires after 15 minutes:
 
 ```sh
-hostmcp agent enroll --invite laptop-invite.json
-hostmcp agent run
+roost agent enroll --invite laptop-invite.json
+roost agent run
 ```
 
 **4. Connect a client.** Give each AI client its own token, scoped to the nodes it
@@ -158,13 +167,13 @@ needs:
 
 ```sh
 # on the Hub machine
-hostmcp token create --id claude --devices laptop --output claude.token
+roost token create --id claude --devices laptop --output claude.token
 ```
 
 ```sh
 # on the client machine, with claude.token copied there (chmod 600)
-claude mcp add --transport stdio hostmcp -- \
-  "$HOME/.local/bin/hostmcp" connect \
+claude mcp add --transport stdio roost -- \
+  "$HOME/.local/bin/roost" connect \
   --url https://mcp.example.com/mcp --token-file /absolute/path/claude.token
 ```
 
@@ -172,15 +181,15 @@ Clients that support remote MCP with an `Authorization` header can use
 `https://mcp.example.com/mcp` directly. Check the setup from a shell:
 
 ```sh
-hostmcp call --url https://mcp.example.com/mcp \
+roost call --url https://mcp.example.com/mcp \
   --token-file /absolute/path/claude.token --tool list_devices
 ```
 
 **5. Keep it running.** Install the Hub and each Agent as a service:
 
 ```sh
-hostmcp service install --role hub   --config ~/.config/hostmcp/hub.json   --name hostmcp-hub
-hostmcp service install --role agent --config ~/.config/hostmcp/agent.json --name hostmcp-agent
+roost service install --role hub   --config ~/.config/roost/hub.json   --name roost-hub
+roost service install --role agent --config ~/.config/roost/agent.json --name roost-agent
 ```
 
 User services are the default. For boot-time system services, root nodes and
@@ -207,8 +216,8 @@ internet. Report vulnerabilities privately as described in [SECURITY.md](SECURIT
 
 ## Status and limitations
 
-The latest release is [v0.2.4](https://github.com/soren-labs/hostmcp/releases/latest).
-HostMCP is pre-1.0: it serves one owner or one trust domain, and minor versions
+The latest release is [v0.2.4](https://github.com/soren-labs/roost/releases/latest).
+Roost is pre-1.0: it serves one owner or one trust domain, and minor versions
 may change behavior. Each [validation record](docs/validation/README.md) lists
 exactly what was tested, on which machines and with which clients.
 
@@ -244,5 +253,5 @@ Participation is covered by the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-HostMCP is released under the [MIT License](LICENSE). Release archives and the
+Roost is released under the [MIT License](LICENSE). Release archives and the
 container image include the license notices of the Go modules they are built from.

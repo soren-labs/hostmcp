@@ -36,11 +36,11 @@ def main():
         with tarfile.open(dist / name) as archive:
             names = archive.getnames()
             assert "LICENSE" in names and "licenses" in names
-    with tempfile.TemporaryDirectory(prefix="hostmcp-packaging-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="roost-packaging-") as tmp:
         folder = Path(tmp).resolve()
         prefix = folder / "bin"
         for role in ("all", "hub", "agent"):
-            binary = "hostmcp" if role == "all" else f"hostmcp-{role}"
+            binary = "roost" if role == "all" else f"roost-{role}"
             asset = dist / f"{binary}_{version}_{goos}_{arch}.tar.gz"
             run("sh", "scripts/install.sh", "--role", role, "--version", version,
                 "--archive", asset, "--checksums", dist / "SHA256SUMS", "--prefix", prefix)
@@ -55,15 +55,15 @@ def main():
                 run(prefix / binary, "stdio", ok=False)
         bad = folder / "bad.tar.gz"
         bad.write_bytes(asset.read_bytes() + b"corrupted")
-        original = (prefix / "hostmcp-agent").read_bytes()
+        original = (prefix / "roost-agent").read_bytes()
         run("sh", "scripts/install.sh", "--role", "agent", "--version", version,
             "--archive", bad, "--checksums", dist / "SHA256SUMS", "--prefix", prefix, ok=False)
-        assert original == (prefix / "hostmcp-agent").read_bytes()
+        assert original == (prefix / "roost-agent").read_bytes()
         # Build an older native agent as the target; no service is installed or started.
-        target = prefix / "hostmcp-agent"
+        target = prefix / "roost-agent"
         run("go", "build", "-trimpath", "-ldflags",
-            "-X main.component=agent -X main.version=0.0.0 -X github.com/soren-labs/hostmcp/internal/protocol.Version=0.0.0",
-            "-o", target, "./cmd/hostmcp")
+            "-X main.component=agent -X main.version=0.0.0 -X github.com/soren-labs/roost/internal/protocol.Version=0.0.0",
+            "-o", target, "./cmd/roost")
         old = target.read_bytes()
         policy = folder / "update.json"
         policy.write_text(json.dumps({"version": 1, "enabled": True, "channel": "stable",
@@ -79,7 +79,7 @@ def main():
             assert target.read_bytes() == old
             run(target, "agent", "update", "--policy", policy, "--archive", asset)
             assert json.loads(run(target, "version").stdout)["version"] == version
-            assert (prefix / "hostmcp-agent.previous").read_bytes() == old
+            assert (prefix / "roost-agent.previous").read_bytes() == old
             run(target, "agent", "update", "--policy", policy, "--rollback")
             assert target.read_bytes() == old
         print("Verified 12 archives, native component roles, offline installs, checksum rejection, and updater safeguards.")

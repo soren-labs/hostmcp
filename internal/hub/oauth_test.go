@@ -11,16 +11,16 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/oauth"
-	"github.com/soren-labs/hostmcp/internal/testutil"
+	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/roost/internal/oauth"
+	"github.com/soren-labs/roost/internal/testutil"
 )
 
 func oauthFixture(t *testing.T) (*Hub, *config.Store, *testutil.Issuer) {
 	t.Helper()
 	issuer := testutil.NewIssuer(t)
 	issuer.Install(t)
-	cfg := config.Hub{Version: 1, Listen: "127.0.0.1:0", PublicURL: "https://mcp.example", Clients: []config.Client{{ID: "owner", TokenHash: config.Hash(aliceToken), Devices: []string{"*"}}}, Devices: []config.Device{{ID: "allowed", TokenHash: config.Hash(deviceToken)}, {ID: "root", TokenHash: config.Hash(deviceToken)}}, OAuth: &config.OAuth{Issuer: issuer.URL, Scopes: []string{"hostmcp:tools"}, Principals: []config.OAuthPrincipal{{Subject: "owner", Devices: []string{"allowed"}}, {Subject: "second", Devices: []string{"allowed"}}}}}
+	cfg := config.Hub{Version: 1, Listen: "127.0.0.1:0", PublicURL: "https://mcp.example", Clients: []config.Client{{ID: "owner", TokenHash: config.Hash(aliceToken), Devices: []string{"*"}}}, Devices: []config.Device{{ID: "allowed", TokenHash: config.Hash(deviceToken)}, {ID: "root", TokenHash: config.Hash(deviceToken)}}, OAuth: &config.OAuth{Issuer: issuer.URL, Scopes: []string{"roost:tools"}, Principals: []config.OAuthPrincipal{{Subject: "owner", Devices: []string{"allowed"}}, {Subject: "second", Devices: []string{"allowed"}}}}}
 	file := filepath.Join(t.TempDir(), "hub.json")
 	if err := config.WriteJSON(file, cfg, false); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestOAuthHubChallengesAndPolicy(t *testing.T) {
 			}
 			if tc.want == 401 || tc.want == 403 {
 				challenge := w.Header().Get("WWW-Authenticate")
-				if !strings.Contains(challenge, `resource_metadata="https://mcp.example/.well-known/oauth-protected-resource/mcp"`) || !strings.Contains(challenge, `scope="hostmcp:tools"`) {
+				if !strings.Contains(challenge, `resource_metadata="https://mcp.example/.well-known/oauth-protected-resource/mcp"`) || !strings.Contains(challenge, `scope="roost:tools"`) {
 					t.Fatal(challenge)
 				}
 			}

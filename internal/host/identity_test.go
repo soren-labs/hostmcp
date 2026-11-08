@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/roost/internal/protocol"
 )
 
 func TestDeviceInfoUsesRegisteredIdentity(t *testing.T) {

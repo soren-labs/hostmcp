@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"unicode/utf8"
 
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/roost/internal/protocol"
 )
 
 type ReadInput struct {

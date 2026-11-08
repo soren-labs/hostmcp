@@ -1,6 +1,6 @@
-# Cloudflare Access Managed OAuth for HostMCP Hub
+# Cloudflare Access Managed OAuth for Roost Hub
 
-HostMCP v0.2.3 adds an optional **Hub-only** backend identity mode for Cloudflare
+Roost v0.2.3 adds an optional **Hub-only** backend identity mode for Cloudflare
 Access. ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
 Access handles authorization code/PKCE, login and OAuth token issuance at the edge.
 The Hub validates the signed `Cf-Access-Jwt-Assertion` forwarded to the origin.
@@ -12,7 +12,7 @@ instructions or the local tests.
 [Cloudflare's Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/)
 requires MCP origins to validate this assertion. Managed OAuth issues an **opaque**
 client bearer (for example, `oauth:...`); Access resolves it to an identity and
-forwards the JWT. Do not configure the Access team as HostMCP's external `oauth`
+forwards the JWT. Do not configure the Access team as Roost's external `oauth`
 issuer: that separate mode expects a JWT **access token**, resource-URL audience,
 scopes and OAuth client identity. Access assertions use the Access application AUD.
 
@@ -35,11 +35,11 @@ cat > cloudflare-access.json <<'JSON'
   ]
 }
 JSON
-hostmcp-hub hub configure --config /absolute/path/hub.json \
+roost-hub hub configure --config /absolute/path/hub.json \
   --cloudflare-access-file cloudflare-access.json
 ```
 
-The compatibility binary `hostmcp` accepts the same command. The policy file
+The compatibility binary `roost` accepts the same command. The policy file
 contains only the object shown above, with no wrapper or version field. The CLI
 stores it under optional `cloudflare_access` in the existing Hub JSON. The config
 format remains **1** (`"version": 1` in the file; `config_version` in CLI version
@@ -121,7 +121,7 @@ existing connectivity and separate credential mechanisms for these paths.
 
 When external OAuth is also configured, its Hub metadata still describes that
 external issuer. Access's edge-owned discovery is separate; review routing so the
-chosen public login flow sees the intended metadata. HostMCP does not rewrite
+chosen public login flow sees the intended metadata. Roost does not rewrite
 external OAuth metadata to impersonate the Access authorization server.
 
 ## Verification and ongoing policy
@@ -179,7 +179,7 @@ fail closed; unchanged legacy credentials still work with valid config.
 Disable with:
 
 ```sh
-hostmcp-hub hub configure --config /absolute/path/hub.json --disable-cloudflare-access
+roost-hub hub configure --config /absolute/path/hub.json --disable-cloudflare-access
 ```
 
 The running Hub immediately denies its old Access principals; restart it to finish
@@ -190,7 +190,7 @@ before a rollback. Other credentials remain intact.
 ## Local checks
 
 ```sh
-go test ./internal/cloudflareaccess ./internal/config ./cmd/hostmcp -run '^TestAccess' -count=1
+go test ./internal/cloudflareaccess ./internal/config ./cmd/roost -run '^TestAccess' -count=1
 go test -race ./internal/hub -run '^TestAccess' -count=1
 ```
 

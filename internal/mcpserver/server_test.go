@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/roost/internal/protocol"
 )
 
 // Text-only clients must receive the same complete result as clients using

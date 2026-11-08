@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Real HostMCP smoke test: Python stdlib + an existing hostmcp binary.
+"""Real Roost smoke test: Python stdlib + an existing roost binary.
 
 Examples:
-  python3 scripts/smoke.py --binary ./bin/hostmcp --mode stdio
-  python3 scripts/smoke.py --binary ./bin/hostmcp --url https://host.example/mcp \
-      --token-file ~/.config/hostmcp/client.token --devices ubuntu,mac,vps
-  python3 scripts/smoke.py --binary ./bin/hostmcp --mode bridge \
+  python3 scripts/smoke.py --binary ./bin/roost --mode stdio
+  python3 scripts/smoke.py --binary ./bin/roost --url https://host.example/mcp \
+      --token-file ~/.config/roost/client.token --devices ubuntu,mac,vps
+  python3 scripts/smoke.py --binary ./bin/roost --mode bridge \
       --url https://host.example/mcp --token-file TOKEN --devices ubuntu,mac
 
-bridge runs `hostmcp connect` and drives its real newline-delimited JSON-RPC.
+bridge runs `roost connect` and drives its real newline-delimited JSON-RPC.
 Each selected device receives temporary files and short-lived test processes.
 Only this run's sessions and its exclusively created directory are cleaned up.
 No token contents are read by Python or printed. No deployment is performed.
@@ -75,7 +75,7 @@ class Client:
             threading.Thread(target=self._reader, daemon=True).start()
             try:
                 init = self.rpc("initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
-                                               "clientInfo": {"name": "hostmcp-smoke", "version": "0.1.0"}})
+                                               "clientInfo": {"name": "roost-smoke", "version": "0.1.0"}})
                 check(init.get("protocolVersion") == PROTOCOL, "server did not negotiate requested MCP protocol")
                 self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
             except Exception:
@@ -126,9 +126,9 @@ class Client:
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                     encoding="utf-8", timeout=self.args.call_timeout, check=False)
         except subprocess.TimeoutExpired:
-            raise TimeoutError("hostmcp call subprocess timed out") from None
+            raise TimeoutError("roost call subprocess timed out") from None
         # Do not echo CLI arguments/stderr: a caller may have configured credentials there.
-        check(result.returncode == 0, "hostmcp call failed with exit code " + str(result.returncode))
+        check(result.returncode == 0, "roost call failed with exit code " + str(result.returncode))
         return json.loads(result.stdout)
 
     def catalog(self):
@@ -210,12 +210,12 @@ class DeviceSmoke:
     def run(self):
         identity = self.call("device_info")
         uid = int(identity["uid"])
-        directory = posixpath.normpath(self.execute('mktemp -d "${TMPDIR:-/tmp}/hostmcp-smoke.XXXXXXXX"').strip())
-        check(directory.startswith("/") and posixpath.basename(directory).startswith("hostmcp-smoke."),
+        directory = posixpath.normpath(self.execute('mktemp -d "${TMPDIR:-/tmp}/roost-smoke.XXXXXXXX"').strip())
+        check(directory.startswith("/") and posixpath.basename(directory).startswith("roost-smoke."),
               "mktemp did not return an exclusive absolute smoke directory")
         self.directory = directory
-        lines = self.execute('printf "%s\\n" "$PWD" "$HOSTMCP_SMOKE_VALUE"; id -u', cwd=directory,
-                             env={"HOSTMCP_SMOKE_VALUE": "中文 env value"}).splitlines()
+        lines = self.execute('printf "%s\\n" "$PWD" "$ROOST_SMOKE_VALUE"; id -u', cwd=directory,
+                             env={"ROOST_SMOKE_VALUE": "中文 env value"}).splitlines()
         check(len(lines) == 3 and lines[0] == directory and lines[1] == "中文 env value" and int(lines[2]) == uid,
               "cwd, environment or actual OS UID did not match device_info")
         self.checks.append("native_uid_cwd_env")
@@ -290,7 +290,7 @@ class DeviceSmoke:
             errors.append("owned process cleanup: " + str(exc))
         if self.directory:
             path = self.directory
-            if not (path.startswith("/") and posixpath.basename(path).startswith("hostmcp-smoke.")):
+            if not (path.startswith("/") and posixpath.basename(path).startswith("roost-smoke.")):
                 errors.append("refused cleanup of an unexpected directory")
             else:
                 try:
@@ -304,7 +304,7 @@ class DeviceSmoke:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--binary", default="./bin/hostmcp")
+    parser.add_argument("--binary", default="./bin/roost")
     parser.add_argument("--mode", choices=("http", "stdio", "bridge"), default="http")
     parser.add_argument("--url")
     parser.add_argument("--token-file")

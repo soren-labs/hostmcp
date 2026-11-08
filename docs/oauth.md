@@ -12,7 +12,7 @@ legacy bearers have independent configuration and explicit node grants.
 
 The design follows the resource-server side of the
 [MCP 2026-07-28 authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).
-HostMCP advertises an external authorization server; that provider handles client
+Roost advertises an external authorization server; that provider handles client
 registration, consent, authorization code + PKCE, token issuance and refresh. There
 is no built-in identity provider, password endpoint or redirect handler.
 
@@ -26,7 +26,7 @@ Use an operator-managed OAuth 2.1 provider with all of the following:
 - Public-client authorization code with S256 PKCE and exact redirect URI validation;
   use the provider's documented consent and registration controls. Prefer Client
   ID Metadata Documents (CIMD). Pre-registration is also possible; DCR is an optional
-  legacy fallback controlled by the provider. HostMCP implements none of these
+  legacy fallback controlled by the provider. Roost implements none of these
   registration mechanisms and cannot add them to an incompatible provider.
 - Resource indicators in authorization AND token requests. Issue **JWT access
   tokens**, with `aud` containing the exact canonical resource URL, e.g.
@@ -57,16 +57,16 @@ umask 077
 cat > oauth.json <<'JSON'
 {
   "issuer": "https://identity.example.com/tenant",
-  "scopes": ["hostmcp:tools"],
+  "scopes": ["roost:tools"],
   "principals": [
     {"subject": "provider-stable-user-subject", "devices": ["mac-worker", "linux-worker"]}
   ]
 }
 JSON
-hostmcp-hub hub configure --config /absolute/path/hub.json --oauth-file oauth.json
+roost-hub hub configure --config /absolute/path/hub.json --oauth-file oauth.json
 ```
 
-The compatibility binary `hostmcp` supports the same commands. This writes the
+The compatibility binary `roost` supports the same commands. This writes the
 optional `oauth` object into the existing format-v1 Hub configuration. Existing
 client hashes, node credentials, invitations and node bindings are retained. Node
 Agent configuration does not change. Restart only the Hub after enabling OAuth or
@@ -95,7 +95,7 @@ never from Host or forwarded headers. Expose these paths through the HTTPS proxy
 
 Both metadata paths describe the same resource and issuer. A request without valid
 authorization returns 401 with `WWW-Authenticate: Bearer resource_metadata="...",
-scope="hostmcp:tools"`. Valid tokens lacking a scope or explicit subject mapping
+scope="roost:tools"`. Valid tokens lacking a scope or explicit subject mapping
 receive 403. Credentials are required on every MCP request, including discovery of
 tools; query-string tokens and duplicate Authorization headers are rejected.
 Metadata alone is public. Existing host/origin allowlists apply to metadata too;
@@ -117,11 +117,11 @@ Codex, Claude and ChatGPT versions and account policies differ. This implementat
 is tested with the official Go MCP client and an isolated issuer fixture; it does
 not establish product-specific OAuth compatibility. Clients unable to complete the
 provider's flow may use a pre-issued legacy client bearer or the existing local
-`hostmcp connect --token-file ...` stdio bridge. That CLI does not perform browser
+`roost connect --token-file ...` stdio bridge. That CLI does not perform browser
 login or refresh OAuth tokens. STDIO uses local process/ENV/file credentials and
 has no OAuth transport handshake. Never use an Agent credential for MCP access.
 
-Disable OAuth with `hostmcp-hub hub configure --config ... --disable-oauth` and
+Disable OAuth with `roost-hub hub configure --config ... --disable-oauth` and
 restart the Hub. This leaves legacy clients intact. To roll back to an older Hub
 binary that rejects unknown config fields, first remove the optional OAuth block
 with this version's CLI. Agents need no upgrade or re-enrollment for either action.
@@ -133,12 +133,12 @@ Use a new temporary directory and unused loopback port; do not use service confi
 ```sh
 task_dir=$(mktemp -d)
 chmod 700 "$task_dir"
-hostmcp hub init --config "$task_dir/hub.json" --listen 127.0.0.1:18787 \
+roost hub init --config "$task_dir/hub.json" --listen 127.0.0.1:18787 \
   --public-url http://127.0.0.1:18787
 # Configure a local test issuer policy with the issuer's loopback URL and real
 # ephemeral subject. Its access-token aud must be http://127.0.0.1:18787/mcp.
-hostmcp hub configure --config "$task_dir/hub.json" --oauth-file /path/to/private-test-oauth.json
-hostmcp hub serve --config "$task_dir/hub.json"
+roost hub configure --config "$task_dir/hub.json" --oauth-file /path/to/private-test-oauth.json
+roost hub serve --config "$task_dir/hub.json"
 # In another shell:
 curl -i http://127.0.0.1:18787/mcp
 curl -fsS http://127.0.0.1:18787/.well-known/oauth-protected-resource/mcp

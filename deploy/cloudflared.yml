@@ -1,5 +1,5 @@
 # Example for a locally-managed named Tunnel. Replace all example values.
-# HostMCP public-url must match https://mcp.example.com.
+# Roost public-url must match https://mcp.example.com.
 tunnel: REPLACE_WITH_TUNNEL_UUID
 credentials-file: /absolute/path/to/cloudflared/REPLACE_WITH_TUNNEL_UUID.json
 

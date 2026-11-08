@@ -1,12 +1,12 @@
 name: Bug report
-description: Something in HostMCP does not work as documented.
+description: Something in Roost does not work as documented.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for the report. **Do not paste tokens, invitations, real configuration files or private host names.**
-        Suspected security problems go to [private vulnerability reporting](https://github.com/soren-labs/hostmcp/security/advisories/new) instead.
+        Suspected security problems go to [private vulnerability reporting](https://github.com/soren-labs/roost/security/advisories/new) instead.
   - type: textarea
     id: what-happened
     attributes:
@@ -20,15 +20,15 @@ body:
       label: Steps to reproduce
       description: Minimal commands or MCP tool calls. Replace secrets and host names with placeholders.
       placeholder: |
-        1. hostmcp hub init --config ...
+        1. roost hub init --config ...
         2. ...
     validations:
       required: true
   - type: textarea
     id: version
     attributes:
-      label: hostmcp version
-      description: Output of `hostmcp version` (or `hostmcp-hub version` / `hostmcp-agent version`) on each affected machine.
+      label: roost version
+      description: Output of `roost version` (or `roost-hub version` / `roost-agent version`) on each affected machine.
       render: json
     validations:
       required: true
@@ -65,6 +65,6 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: Redacted `hostmcp doctor` output and relevant logs
+      label: Redacted `roost doctor` output and relevant logs
       description: Remove usernames, paths and host names you do not want to share.
       render: text

@@ -1,4 +1,4 @@
-module github.com/soren-labs/hostmcp
+module github.com/soren-labs/roost
 
 go 1.25.0
 

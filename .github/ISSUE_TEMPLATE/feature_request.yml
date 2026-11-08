@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest a change to HostMCP's tools, deployment or workflow.
+description: Suggest a change to Roost's tools, deployment or workflow.
 labels: [enhancement]
 body:
   - type: textarea
@@ -13,7 +13,7 @@ body:
     id: proposal
     attributes:
       label: Proposed change
-      description: How should HostMCP behave? Include example commands or tool calls if useful.
+      description: How should Roost behave? Include example commands or tool calls if useful.
     validations:
       required: true
   - type: textarea
@@ -23,6 +23,6 @@ body:
   - type: markdown
     attributes:
       value: |
-        HostMCP deliberately runs tools with the full ordinary authority of each node's OS account,
+        Roost deliberately runs tools with the full ordinary authority of each node's OS account,
         without directory or command allowlists, and keeps the Hub from executing commands.
-        Proposals that change these boundaries need a strong justification; see [docs/security.md](https://github.com/soren-labs/hostmcp/blob/main/docs/security.md).
+        Proposals that change these boundaries need a strong justification; see [docs/security.md](https://github.com/soren-labs/roost/blob/main/docs/security.md).

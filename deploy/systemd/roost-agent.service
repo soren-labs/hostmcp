@@ -1,12 +1,12 @@
-# User unit: ~/.config/systemd/user/hostmcp-agent.service
+# User unit: ~/.config/systemd/user/roost-agent.service
 # Runs as the user's real account, with that account's ordinary OS authority.
 [Unit]
-Description=HostMCP Device Agent
+Description=Roost Device Agent
 After=network-online.target
 
 [Service]
 Type=exec
-ExecStart=%h/.local/bin/hostmcp agent run --config %h/.config/hostmcp/agent.json
+ExecStart=%h/.local/bin/roost agent run --config %h/.config/roost/agent.json
 WorkingDirectory=%h
 Restart=on-failure
 RestartSec=3

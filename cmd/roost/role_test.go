@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soren-labs/hostmcp/internal/config"
+	"github.com/soren-labs/roost/internal/config"
 )
 
 func TestComponentRolesRejectUnsupportedCommands(t *testing.T) {
@@ -36,7 +36,7 @@ func TestOAuthCLIConfigurePreservesLegacyConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := config.OAuth{Issuer: "https://issuer.example", Scopes: []string{"hostmcp:tools"}, Principals: []config.OAuthPrincipal{{Subject: "subject", Devices: []string{"node"}}}}
+	policy := config.OAuth{Issuer: "https://issuer.example", Scopes: []string{"roost:tools"}, Principals: []config.OAuthPrincipal{{Subject: "subject", Devices: []string{"node"}}}}
 	policyFile := filepath.Join(t.TempDir(), "oauth.json")
 	if err = config.WriteJSON(policyFile, policy, false); err != nil {
 		t.Fatal(err)
@@ -70,13 +70,13 @@ func TestOAuthCLIConfigurePreservesLegacyConfiguration(t *testing.T) {
 func TestComponentUsageOnlyShowsSupportedCommands(t *testing.T) {
 	for _, role := range []string{"hub", "agent"} {
 		text := roleUsage(role)
-		if strings.Contains(text, "hostmcp stdio") || strings.Contains(text, "hostmcp-"+role+" stdio") {
+		if strings.Contains(text, "roost stdio") || strings.Contains(text, "roost-"+role+" stdio") {
 			t.Fatal("unsupported stdio in component usage")
 		}
-		if role == "agent" && strings.Contains(text, "hostmcp-agent hub") {
+		if role == "agent" && strings.Contains(text, "roost-agent hub") {
 			t.Fatal("Hub command shown for Agent")
 		}
-		if !strings.Contains(text, "hostmcp-"+role+" version") {
+		if !strings.Contains(text, "roost-"+role+" version") {
 			t.Fatal("missing component usage")
 		}
 	}
