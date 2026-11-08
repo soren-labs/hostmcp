@@ -17,9 +17,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/hostmcp/internal/agent"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/rmc/internal/agent"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 const aliceToken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -123,7 +123,7 @@ func mcpClient(t *testing.T, url, token, version string) *mcp.ClientSession {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	c := mcp.NewClient(&mcp.Implementation{Name: "hostmcp-test", Version: "1"}, &mcp.ClientOptions{
+	c := mcp.NewClient(&mcp.Implementation{Name: "rmc-test", Version: "1"}, &mcp.ClientOptions{
 		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {},
 	})
 	s, err := c.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{token}}, MaxRetries: -1, DisableStandaloneSSE: true}, &mcp.ClientSessionOptions{ProtocolVersion: version})

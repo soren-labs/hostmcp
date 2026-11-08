@@ -32,9 +32,9 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - name: Build native executable for CLI validation
-        run: go build -trimpath -o build/hostmcp ./cmd/hostmcp
+        run: go build -trimpath -o build/rmc ./cmd/rmc
       - name: Smoke test stdio CLI and nine native tools
-        run: python3 scripts/smoke.py --binary ./build/hostmcp --mode stdio
+        run: python3 scripts/smoke.py --binary ./build/rmc --mode stdio
 
   build:
     needs: validate
@@ -90,5 +90,5 @@ jobs:
         # The changelog section comes first; --generate-notes appends the PR list.
         run: >-
           gh release create "$GITHUB_REF_NAME" dist/* --verify-tag
-          --title "HostMCP $GITHUB_REF_NAME"
+          --title "RMC $GITHUB_REF_NAME"
           --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes

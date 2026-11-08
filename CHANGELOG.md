@@ -1,9 +1,28 @@
 # Changelog
 
-All notable changes to HostMCP are recorded here. Versions follow
+All notable changes to RMC (named HostMCP up to v0.2.4) are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/); before 1.0, minor versions may
 include breaking changes and are called out explicitly. Release notes on GitHub
 are generated from the matching section of this file.
+
+## Unreleased
+
+### Renamed: HostMCP is now RMC (Remote Machine Control)
+
+- The project, repository, Go module and binaries are now `rmc`,
+  `rmc-hub` and `rmc-agent` (`github.com/soren-labs/rmc`). The README
+  leads with what RMC is for: letting web, mobile, desktop and terminal AI
+  clients work on your own machines through one self-hosted endpoint.
+- Nothing changes on the wire: Hub↔Agent wire version 1, MCP tools, arguments
+  and configuration formats are the same, and mixed RMC/HostMCP v0.2.x Hubs
+  and Agents interoperate.
+- Existing installations keep working: the default config falls back to
+  `~/.config/hostmcp/` when only that file exists, `HOSTMCP_TOKEN` is read when
+  `RMC_TOKEN` is unset, and `service install`/`uninstall` accept existing
+  `hostmcp-…` services with their original launchd labels and log directories.
+- Releases also publish `hostmcp-agent_V_OS_ARCH.tar.gz`, containing the RMC
+  Agent, so v0.2.x Agents can self-update across the rename.
+- See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
 
 ## v0.2.4 — 2026-11-04
 

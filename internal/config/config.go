@@ -237,7 +237,7 @@ func WriteSecret(path string, data []byte, replace bool) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".hostmcp-*")
+	f, err := os.CreateTemp(dir, ".rmc-*")
 	if err != nil {
 		return err
 	}

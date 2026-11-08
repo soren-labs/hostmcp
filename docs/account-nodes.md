@@ -1,6 +1,6 @@
 # 账户节点与 Agent 权限
 
-HostMCP 的权限粒度是**机器上的系统账户**。一个 `device` ID 表示一个账户节点，
+RMC 的权限粒度是**机器上的系统账户**。一个 `device` ID 表示一个账户节点，
 不是自动包含该物理机器所有账户的入口。同机需要两个权限等级时，运行两个独立
 Agent 服务，各自有邀请、配置、设备凭证和节点 ID。
 
@@ -19,10 +19,10 @@ Agent 服务，各自有邀请、配置、设备凭证和节点 ID。
 
 ```sh
 umask 077
-hostmcp device invite --config /absolute/path/hub.json \
+rmc device invite --config /absolute/path/hub.json \
   --id workstation-worker --user worker \
   --output /absolute/path/workstation-worker-invite.json
-hostmcp device invite --config /absolute/path/hub.json \
+rmc device invite --config /absolute/path/hub.json \
   --id workstation-root --user root \
   --output /absolute/path/workstation-root-invite.json
 ```
@@ -43,18 +43,18 @@ hostmcp device invite --config /absolute/path/hub.json \
 
 ```sh
 umask 077
-mkdir -p "$HOME/.config/hostmcp"
-hostmcp agent enroll --invite /absolute/path/workstation-worker-invite.json \
-  --config "$HOME/.config/hostmcp/agent.json"
-hostmcp agent run --config "$HOME/.config/hostmcp/agent.json"
+mkdir -p "$HOME/.config/rmc"
+rmc agent enroll --invite /absolute/path/workstation-worker-invite.json \
+  --config "$HOME/.config/rmc/agent.json"
+rmc agent run --config "$HOME/.config/rmc/agent.json"
 ```
 
 先在前台确认成功，再按需要安装用户服务：
 
 ```sh
-hostmcp service install --role agent \
-  --config "$HOME/.config/hostmcp/agent.json" \
-  --name hostmcp-workstation-worker
+rmc service install --role agent \
+  --config "$HOME/.config/rmc/agent.json" \
+  --name rmc-workstation-worker
 ```
 
 Linux 用户服务的开机/注销行为取决于该用户的 systemd manager 和 linger 设置；
@@ -62,9 +62,9 @@ Mac LaunchAgent 依赖登录会话。需要无人登录时随系统启动，可�
 系统服务，仍然指定普通账户执行。例如 Linux 上：
 
 ```sh
-sudo /usr/local/bin/hostmcp service install --system --user worker \
-  --role agent --config /home/worker/.config/hostmcp/agent.json \
-  --name hostmcp-workstation-worker
+sudo /usr/local/bin/rmc service install --system --user worker \
+  --role agent --config /home/worker/.config/rmc/agent.json \
+  --name rmc-workstation-worker
 ```
 
 选择用户服务或系统服务中的一种，避免让同一节点的两个进程互相替换连接。
@@ -76,12 +76,12 @@ sudo /usr/local/bin/hostmcp service install --system --user worker \
 root 是明确选择的第二个节点。以管理员身份注册并安装系统服务：
 
 ```sh
-sudo /usr/local/bin/hostmcp agent enroll \
+sudo /usr/local/bin/rmc agent enroll \
   --invite /absolute/path/workstation-root-invite.json \
-  --config /var/lib/hostmcp/root.json
-sudo /usr/local/bin/hostmcp service install --system --user root \
-  --role agent --config /var/lib/hostmcp/root.json \
-  --name hostmcp-workstation-root
+  --config /var/lib/rmc/root.json
+sudo /usr/local/bin/rmc service install --system --user root \
+  --role agent --config /var/lib/rmc/root.json \
+  --name rmc-workstation-root
 ```
 
 Linux 使用 systemd system service，macOS 使用 LaunchDaemon。macOS 的系统
@@ -97,10 +97,10 @@ Linux 使用 systemd system service，macOS 使用 LaunchDaemon。macOS 的系�
 在 Hub 上执行：
 
 ```sh
-hostmcp token create --config /absolute/path/hub.json \
+rmc token create --config /absolute/path/hub.json \
   --id codex-worker --devices workstation-worker,mac-developer \
   --output /absolute/path/codex-worker.token
-hostmcp token create --config /absolute/path/hub.json \
+rmc token create --config /absolute/path/hub.json \
   --id claude-admin --devices workstation-root \
   --output /absolute/path/claude-admin.token
 ```
@@ -118,7 +118,7 @@ Hub 客户端身份与 OS 用户身份并不相同。两个不同客户端获准
 先准备同机的 root 与普通账户两个节点，以及分别授权的两个 token。运行：
 
 ```sh
-python3 scripts/verify-access.py --binary /absolute/path/hostmcp \
+python3 scripts/verify-access.py --binary /absolute/path/rmc \
   --url https://mcp.example.com/mcp \
   --admin-token-file /absolute/path/admin.token \
   --ordinary-token-file /absolute/path/ordinary.token \
@@ -142,14 +142,14 @@ python3 scripts/verify-access.py --binary /absolute/path/hostmcp \
 账户节点：
 
 ```sh
-hostmcp token list --config /absolute/path/hub.json
-hostmcp token update --config /absolute/path/hub.json \
+rmc token list --config /absolute/path/hub.json
+rmc token update --config /absolute/path/hub.json \
   --id codex-worker --devices workstation-worker
-hostmcp token rotate --config /absolute/path/hub.json \
+rmc token rotate --config /absolute/path/hub.json \
   --id codex-worker --output /absolute/path/codex-worker-new.token
-hostmcp token revoke --config /absolute/path/hub.json --id codex-worker
-hostmcp device revoke --config /absolute/path/hub.json --id workstation-root
-sudo /usr/local/bin/hostmcp service uninstall --system --name hostmcp-workstation-root
+rmc token revoke --config /absolute/path/hub.json --id codex-worker
+rmc device revoke --config /absolute/path/hub.json --id workstation-root
+sudo /usr/local/bin/rmc service uninstall --system --name rmc-workstation-root
 ```
 
 撤销阻止后续授权操作，不回滚已产生的系统效果。需要停止已运行任务时，应在撤销

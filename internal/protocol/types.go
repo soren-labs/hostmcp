@@ -1,4 +1,4 @@
-// Package protocol defines HostMCP's private hub-to-device protocol.
+// Package protocol defines RMC's private hub-to-device protocol.
 package protocol
 
 import (

@@ -7,13 +7,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/soren-labs/hostmcp/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 func TestAccessCLIIndependentPolicies(t *testing.T) {
 	file, store := testHub(t)
 	if err := store.Update(func(h *config.Hub) error {
-		h.OAuth = &config.OAuth{Issuer: "https://issuer.example", Scopes: []string{"hostmcp:tools"}, Principals: []config.OAuthPrincipal{{Subject: "owner", Devices: []string{"worker"}}}}
+		h.OAuth = &config.OAuth{Issuer: "https://issuer.example", Scopes: []string{"rmc:tools"}, Principals: []config.OAuthPrincipal{{Subject: "owner", Devices: []string{"worker"}}}}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

@@ -1,7 +1,7 @@
-# Cloudflare Access Managed OAuth for HostMCP Hub
+# Cloudflare Access Managed OAuth for RMC Hub
 
-HostMCP v0.2.3 adds an optional **Hub-only** backend identity mode for Cloudflare
-Access. ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
+RMC supports an optional **Hub-only** backend identity mode for Cloudflare
+Access (introduced in HostMCP v0.2.3). ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
 Access handles authorization code/PKCE, login and OAuth token issuance at the edge.
 The Hub validates the signed `Cf-Access-Jwt-Assertion` forwarded to the origin.
 Agent configuration, device credentials, native authority and wire version 1 do
@@ -12,7 +12,7 @@ instructions or the local tests.
 [Cloudflare's Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/)
 requires MCP origins to validate this assertion. Managed OAuth issues an **opaque**
 client bearer (for example, `oauth:...`); Access resolves it to an identity and
-forwards the JWT. Do not configure the Access team as HostMCP's external `oauth`
+forwards the JWT. Do not configure the Access team as RMC's external `oauth`
 issuer: that separate mode expects a JWT **access token**, resource-URL audience,
 scopes and OAuth client identity. Access assertions use the Access application AUD.
 
@@ -35,11 +35,11 @@ cat > cloudflare-access.json <<'JSON'
   ]
 }
 JSON
-hostmcp-hub hub configure --config /absolute/path/hub.json \
+rmc-hub hub configure --config /absolute/path/hub.json \
   --cloudflare-access-file cloudflare-access.json
 ```
 
-The compatibility binary `hostmcp` accepts the same command. The policy file
+The compatibility binary `rmc` accepts the same command. The policy file
 contains only the object shown above, with no wrapper or version field. The CLI
 stores it under optional `cloudflare_access` in the existing Hub JSON. The config
 format remains **1** (`"version": 1` in the file; `config_version` in CLI version
@@ -68,7 +68,8 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
 
 ## Production connection procedure
 
-1. Review and build/install the v0.2.3 Hub artifact using the existing release
+1. Review and build/install an RMC Hub (v0.3.0 or later; HostMCP v0.2.3+ also
+   supports this mode) using the existing release
    procedure. Back up the existing Hub config privately before configuring it.
    No Agent upgrade or re-enrollment is required.
 2. In the intended Cloudflare account, review the self-hosted Access application's
@@ -121,7 +122,7 @@ existing connectivity and separate credential mechanisms for these paths.
 
 When external OAuth is also configured, its Hub metadata still describes that
 external issuer. Access's edge-owned discovery is separate; review routing so the
-chosen public login flow sees the intended metadata. HostMCP does not rewrite
+chosen public login flow sees the intended metadata. RMC does not rewrite
 external OAuth metadata to impersonate the Access authorization server.
 
 ## Verification and ongoing policy
@@ -179,7 +180,7 @@ fail closed; unchanged legacy credentials still work with valid config.
 Disable with:
 
 ```sh
-hostmcp-hub hub configure --config /absolute/path/hub.json --disable-cloudflare-access
+rmc-hub hub configure --config /absolute/path/hub.json --disable-cloudflare-access
 ```
 
 The running Hub immediately denies its old Access principals; restart it to finish
@@ -190,7 +191,7 @@ before a rollback. Other credentials remain intact.
 ## Local checks
 
 ```sh
-go test ./internal/cloudflareaccess ./internal/config ./cmd/hostmcp -run '^TestAccess' -count=1
+go test ./internal/cloudflareaccess ./internal/config ./cmd/rmc -run '^TestAccess' -count=1
 go test -race ./internal/hub -run '^TestAccess' -count=1
 ```
 

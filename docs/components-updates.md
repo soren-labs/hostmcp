@@ -1,14 +1,15 @@
 # Hub and Agent lifecycle
 
-The v0.2.2 baseline keeps `hostmcp` as the original compatibility binary and adds
-`hostmcp-hub` and `hostmcp-agent` artifacts. All variants share Go source and may share a
+RMC ships `rmc` as the all-in-one compatibility binary plus separate `rmc-hub`
+and `rmc-agent` artifacts (introduced in HostMCP v0.2.2 as `hostmcp`,
+`hostmcp-hub` and `hostmcp-agent`). All variants share Go source and may share a
 release tag; each has a separate archive, destination path and deployment lifecycle.
 
 | Artifact | Commands | Upgrade when |
 | --- | --- | --- |
-| `hostmcp-hub` | `hub`, `device`, `token`, `connect`, `call`, service/diagnostics | Auth, MCP presentation, routing, metadata or Hub policy changes |
-| `hostmcp-agent` | `agent enroll/run/update`, service/diagnostics | Native executor fixes/features or deliberate wire changes |
-| `hostmcp` | All existing commands, including local `stdio` | Compatibility installations, bridges and local use |
+| `rmc-hub` | `hub`, `device`, `token`, `connect`, `call`, service/diagnostics | Auth, MCP presentation, routing, metadata or Hub policy changes |
+| `rmc-agent` | `agent enroll/run/update`, service/diagnostics | Native executor fixes/features or deliberate wire changes |
+| `rmc` | All existing commands, including local `stdio` | Compatibility installations, bridges and local use |
 
 Role-specific binaries reject unsupported commands before reading configs or
 starting services. `service install --role` must match the binary. Service uninstall
@@ -24,14 +25,14 @@ archives add `--archive ... --checksums ...`. Service generation uses the execut
 actually invoked; new agent services can use:
 
 ```sh
-/absolute/path/hostmcp-agent service install --role agent \
-  --config /absolute/path/agent.json --name hostmcp-agent
+/absolute/path/rmc-agent service install --role agent \
+  --config /absolute/path/agent.json --name rmc-agent
 ```
 
-Existing services using `hostmcp agent run` keep working. Migrating to a new path
+Existing services using `rmc agent run` keep working. Migrating to a new path
 requires updating/reinstalling that service deliberately, preserving its config,
-name and OS account. An existing `hostmcp` service does not start using a new
-`hostmcp-agent` file automatically. Agent updates can end managed process sessions
+name and OS account. An existing `rmc` service does not start using a new
+`rmc-agent` file automatically. Agent updates can end managed process sessions
 when the service restarts; schedule maintenance around important work.
 
 ## Compatibility contract
@@ -73,7 +74,7 @@ or schedules `agent update`. The agent channel has no update API or update URL m
 This constrains the updater mechanism: a client with native execution authority
 on a node can still edit its own files or run software as that OS account; this
 is not an additional OS permission boundary. The updater accepts only the fixed HTTPS GitHub release source
-`soren-labs/hostmcp`, exact stable versions, this node's OS/architecture and a
+`soren-labs/rmc`, exact stable versions, this node's OS/architecture and a
 locally pinned SHA-256. There is no `latest`, prerelease channel, alternate repository
 or custom URL field. Policy files and executables must be owned by the calling
 user; policy files are private. The updater refuses root entirely. Root nodes and
@@ -90,7 +91,7 @@ release and its digest for this OS/architecture:
   "channel": "stable",
   "target_version": "0.2.2",
   "sha256": "REPLACE_WITH_64_HEX_DIGITS_FOR_THE_AGENT_ARCHIVE",
-  "binary": "/home/worker/.local/bin/hostmcp-agent"
+  "binary": "/home/worker/.local/bin/rmc-agent"
 }
 ```
 
@@ -110,10 +111,10 @@ key rotation for signed release manifests. The local checksum pin is the content
 trust anchor; protecting its distribution is the operator's responsibility.
 
 ```sh
-hostmcp-agent agent update --policy /absolute/path/agent-update.json
+rmc-agent agent update --policy /absolute/path/agent-update.json
 # Or transfer a reviewed archive without giving the node network access:
-hostmcp-agent agent update --policy /absolute/path/agent-update.json \
-  --archive /absolute/path/hostmcp-agent_X.Y.Z_linux_amd64.tar.gz
+rmc-agent agent update --policy /absolute/path/agent-update.json \
+  --archive /absolute/path/rmc-agent_X.Y.Z_linux_amd64.tar.gz
 ```
 
 The updater locks the target, refuses automatic downgrade, bounds download and
@@ -134,11 +135,11 @@ or automatically roll back a process that fails after restart. Plan an explicit
 restart and check the running version/online state. To restore the retained binary:
 
 ```sh
-hostmcp-agent agent update --policy /absolute/path/agent-update.json --rollback
+rmc-agent agent update --policy /absolute/path/agent-update.json --rollback
 # Restart the same service, then verify list_devices and device_info.
 ```
 
-If the new executable cannot start at all, use another verified HostMCP updater
+If the new executable cannot start at all, use another verified RMC updater
 or restore the local `.previous` file to the original path with a same-directory
 rename before restarting. Rollback consumes the local backup and never downloads a URL. Revoke or change the
 target policy before the next scheduled update if you want the node to stay on the
@@ -171,8 +172,8 @@ shell, disk or external network is healthy. Use `device_info` for an active chec
 | --- | --- | --- |
 | Linux user | `systemctl --user status NAME`; `journalctl --user -u NAME` | `systemctl --user restart NAME` |
 | Linux system | `systemctl status NAME`; `journalctl -u NAME` | Administrator runs `systemctl restart NAME` |
-| macOS user | `launchctl print gui/UID/com.hostmcp.NAME`; configured log file | `launchctl kickstart -k gui/UID/com.hostmcp.NAME` in the correct login session |
-| macOS system | `launchctl print system/com.hostmcp.NAME`; configured log file | Administrator runs `launchctl kickstart -k system/com.hostmcp.NAME` |
+| macOS user | `launchctl print gui/UID/com.rmc.NAME`; configured log file | `launchctl kickstart -k gui/UID/com.rmc.NAME` in the correct login session |
+| macOS system | `launchctl print system/com.rmc.NAME`; configured log file | Administrator runs `launchctl kickstart -k system/com.rmc.NAME` |
 
 Use the actual service label; manual templates may have different labels. A Hub
 restart reconnects Agents; do not replay uncertain side effects. A sleeping,
@@ -184,8 +185,8 @@ require the appropriate user manager/login and macOS FileVault/TCC state.
 
 ```sh
 go test ./internal/update -count=1
-bash scripts/release.sh v0.2.3 ./build/release-smoke
-python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.2.3
+bash scripts/release.sh v0.3.0 ./build/release-smoke
+python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.3.0
 ```
 
 The packaging test builds a temporary older native Agent, installs each native

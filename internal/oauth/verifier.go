@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/soren-labs/hostmcp/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 const maxDocument = 1 << 20

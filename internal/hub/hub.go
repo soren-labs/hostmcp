@@ -25,11 +25,11 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/hostmcp/internal/cloudflareaccess"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/mcpserver"
-	"github.com/soren-labs/hostmcp/internal/oauth"
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/rmc/internal/cloudflareaccess"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/mcpserver"
+	"github.com/soren-labs/rmc/internal/oauth"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 type Hub struct {
@@ -477,7 +477,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 			device = id
 		}
 		h.auditDenied("agent", "invalid_credentials", "device", device)
-		w.Header().Set("WWW-Authenticate", "Bearer realm=\"hostmcp-device\"")
+		w.Header().Set("WWW-Authenticate", "Bearer realm=\"rmc-device\"")
 		http.Error(w, "invalid device credentials", 401)
 		return
 	}

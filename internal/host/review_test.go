@@ -262,7 +262,7 @@ func TestRootPatchKeepsOwnerAndMoveKeepsOwner(t *testing.T) {
 }
 
 func TestPatchWriteFailureRestoresOriginal(t *testing.T) {
-	const childFlag = "HOSTMCP_TEST_FSIZE_CHILD_FILE"
+	const childFlag = "RMC_TEST_FSIZE_CHILD_FILE"
 	if path := os.Getenv(childFlag); path != "" {
 		// Separate process: the file-size limit must not affect the parent tests.
 		signal.Ignore(syscall.SIGXFSZ)
@@ -422,13 +422,13 @@ func intPtr(n int) *int { return &n }
 // Helper process for TestProcessLifetimeSemantics. It detaches into its own
 // session, as a daemon does, and records its PID.
 func TestHelperDetachedProcess(t *testing.T) {
-	pidFile := os.Getenv("HOSTMCP_TEST_DETACHED_PIDFILE")
+	pidFile := os.Getenv("RMC_TEST_DETACHED_PIDFILE")
 	if pidFile == "" {
 		t.Skip("helper process")
 	}
-	if os.Getenv("HOSTMCP_TEST_DETACHED_CHILD") != "1" {
+	if os.Getenv("RMC_TEST_DETACHED_CHILD") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestHelperDetachedProcess$")
-		cmd.Env = append(os.Environ(), "HOSTMCP_TEST_DETACHED_CHILD=1")
+		cmd.Env = append(os.Environ(), "RMC_TEST_DETACHED_CHILD=1")
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
@@ -469,7 +469,7 @@ func TestProcessLifetimeSemantics(t *testing.T) {
 	pidFile := filepath.Join(dir, "daemon.pid")
 	// Give the helper time to spawn its new session before the command shell
 	// exits and its original process group is terminated.
-	cmd := "HOSTMCP_TEST_DETACHED_PIDFILE=" + shellQuote(pidFile) + " " + shellQuote(executable) + " -test.run='^TestHelperDetachedProcess$' >/dev/null 2>&1 & sleep 0.5"
+	cmd := "RMC_TEST_DETACHED_PIDFILE=" + shellQuote(pidFile) + " " + shellQuote(executable) + " -test.run='^TestHelperDetachedProcess$' >/dev/null 2>&1 & sleep 0.5"
 	_, _ = untilDone(t, r, "alice", call(t, r, "alice", "exec_command", ExecInput{Cmd: cmd}))
 	var daemon int
 	for deadline = time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {

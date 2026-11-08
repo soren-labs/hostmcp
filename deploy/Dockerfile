@@ -13,10 +13,10 @@ ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN ldflags="-s -w -X main.component=hub -X main.commit=$COMMIT -X main.buildTime=$BUILD_TIME"; \
     if [ -n "$VERSION" ]; then \
-      ldflags="$ldflags -X main.version=$VERSION -X github.com/soren-labs/hostmcp/internal/protocol.Version=$VERSION"; \
+      ldflags="$ldflags -X main.version=$VERSION -X github.com/soren-labs/rmc/internal/protocol.Version=$VERSION"; \
     fi; \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "$ldflags" \
-    -o /out/hostmcp ./cmd/hostmcp
+    -o /out/rmc ./cmd/rmc
 RUN mkdir -p /licenses /state && chmod 0700 /state && \
     go list -m -f '{{if not .Main}}{{.Path}}@{{.Version}} {{.Dir}}{{end}}' all | \
     while read -r module directory; do \
@@ -30,12 +30,12 @@ RUN mkdir -p /licenses /state && chmod 0700 /state && \
 
 FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build /out/hostmcp /hostmcp
+COPY --from=build /out/rmc /rmc
 COPY --from=build /src/LICENSE /LICENSE
 COPY --from=build /licenses /licenses
 COPY --from=build --chown=10001:10001 /state /state
 USER 10001:10001
 WORKDIR /state
 EXPOSE 8787
-ENTRYPOINT ["/hostmcp"]
+ENTRYPOINT ["/rmc"]
 CMD ["hub", "serve", "--config", "/state/hub.json"]

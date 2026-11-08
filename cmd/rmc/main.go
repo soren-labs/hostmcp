@@ -1,4 +1,4 @@
-// HostMCP is a native, self-hosted MCP gateway and device executor.
+// RMC is a native, self-hosted MCP gateway and device executor.
 package main
 
 import (
@@ -21,14 +21,14 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/hostmcp/internal/agent"
-	"github.com/soren-labs/hostmcp/internal/client"
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/host"
-	"github.com/soren-labs/hostmcp/internal/hub"
-	"github.com/soren-labs/hostmcp/internal/mcpserver"
-	"github.com/soren-labs/hostmcp/internal/protocol"
-	"github.com/soren-labs/hostmcp/internal/service"
+	"github.com/soren-labs/rmc/internal/agent"
+	"github.com/soren-labs/rmc/internal/client"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/host"
+	"github.com/soren-labs/rmc/internal/hub"
+	"github.com/soren-labs/rmc/internal/mcpserver"
+	"github.com/soren-labs/rmc/internal/protocol"
+	"github.com/soren-labs/rmc/internal/service"
 )
 
 var version = "0.2.4-dev"
@@ -36,29 +36,29 @@ var component = "all"
 var commit = "development"
 var buildTime = "unknown"
 
-const usage = `HostMCP — native Linux/macOS tools, locally or across your devices
+const usage = `RMC — native Linux/macOS tools, locally or across your devices
 
-  hostmcp stdio
-  hostmcp hub init [--config FILE] [--listen HOST:PORT] [--public-url URL]
-  hostmcp hub serve [--config FILE]
-  hostmcp hub configure [--config FILE] [--public-url URL] [--listen HOST:PORT]
-  hostmcp device invite --id NAME --output INVITE.json [--user OS_USER] [--config HUB.json]
-  hostmcp device revoke --id NAME [--config HUB.json]
-  hostmcp device list [--config HUB.json]
-  hostmcp agent enroll --invite INVITE.json [--config AGENT.json]
-  hostmcp agent run [--config AGENT.json]
-  hostmcp agent update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
-  hostmcp token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
-  hostmcp token list [--config HUB.json]
-  hostmcp token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
-  hostmcp token rotate --id NAME --output NEW_TOKEN [--config HUB.json]
-  hostmcp token revoke --id NAME [--config HUB.json]
-  hostmcp connect --url https://host.example/mcp --token-file TOKEN
-  hostmcp call --url URL --token-file TOKEN --tool list_devices --args '{}'
-  hostmcp service install --role hub|agent --config FILE [--name hostmcp-NAME] [--system --user OS_USER]
-  hostmcp service uninstall --name hostmcp-NAME [--system]
-  hostmcp doctor
-  hostmcp version
+  rmc stdio
+  rmc hub init [--config FILE] [--listen HOST:PORT] [--public-url URL]
+  rmc hub serve [--config FILE]
+  rmc hub configure [--config FILE] [--public-url URL] [--listen HOST:PORT]
+  rmc device invite --id NAME --output INVITE.json [--user OS_USER] [--config HUB.json]
+  rmc device revoke --id NAME [--config HUB.json]
+  rmc device list [--config HUB.json]
+  rmc agent enroll --invite INVITE.json [--config AGENT.json]
+  rmc agent run [--config AGENT.json]
+  rmc agent update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
+  rmc token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
+  rmc token list [--config HUB.json]
+  rmc token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
+  rmc token rotate --id NAME --output NEW_TOKEN [--config HUB.json]
+  rmc token revoke --id NAME [--config HUB.json]
+  rmc connect --url https://host.example/mcp --token-file TOKEN
+  rmc call --url URL --token-file TOKEN --tool list_devices --args '{}'
+  rmc service install --role hub|agent --config FILE [--name rmc-NAME] [--system --user OS_USER]
+  rmc service uninstall --name rmc-NAME [--system]
+  rmc doctor
+  rmc version
 
 Run a subcommand with --help for flags. Secrets are written to private files.
 MCP HTTP requires a client credential or a configured, verified Access assertion.
@@ -70,7 +70,18 @@ func defaultFile(name string) string {
 	if err != nil {
 		return name
 	}
-	return filepath.Join(h, ".config", "hostmcp", name)
+	current := filepath.Join(h, ".config", "rmc", name)
+	// Installations from before the rename keep working: when only the old
+	// HostMCP default exists, use it rather than starting with a fresh file.
+	// This runs while flag defaults are built, so it must not log: an explicit
+	// --config would otherwise be reported as using the legacy path.
+	if _, err := os.Lstat(current); os.IsNotExist(err) {
+		legacy := filepath.Join(h, ".config", "hostmcp", name)
+		if _, err := os.Lstat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return current
 }
 func flags(name string) *flag.FlagSet {
 	f := flag.NewFlagSet(name, flag.ContinueOnError)
@@ -110,7 +121,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := run(ctx, os.Args[1:]); err != nil && !errors.Is(err, flag.ErrHelp) && !errors.Is(err, context.Canceled) {
-		fmt.Fprintln(os.Stderr, "hostmcp:", err)
+		fmt.Fprintln(os.Stderr, "rmc:", err)
 		os.Exit(1)
 	}
 }
@@ -158,7 +169,7 @@ func run(ctx context.Context, args []string) error {
 		}})
 		return s.Run(ctx, &mcp.StdioTransport{MaxLineLength: protocol.MaxMessageBytes})
 	default:
-		return fmt.Errorf("unknown command %q; use hostmcp --help", args[0])
+		return fmt.Errorf("unknown command %q; use rmc --help", args[0])
 	}
 }
 
@@ -299,7 +310,7 @@ func hubCommand(ctx context.Context, args []string) error {
 		srv := &http.Server{Addr: cfg.Listen, Handler: h.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 50 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16 << 10}
 		errCh := make(chan error, 1)
 		go func() { errCh <- srv.ListenAndServe() }()
-		log.Printf("HostMCP hub listening on %s; public MCP %s/mcp", cfg.Listen, cfg.PublicURL)
+		log.Printf("RMC hub listening on %s; public MCP %s/mcp", cfg.Listen, cfg.PublicURL)
 		select {
 		case err := <-errCh:
 			if errors.Is(err, http.ErrServerClosed) {
@@ -619,7 +630,7 @@ func agentCommand(ctx context.Context, args []string) error {
 func clientCommand(ctx context.Context, command string, args []string) error {
 	f := flags(command)
 	url := f.String("url", "", "remote MCP endpoint")
-	tokenFile := f.String("token-file", "", "owner-only bearer file (or HOSTMCP_TOKEN)")
+	tokenFile := f.String("token-file", "", "owner-only bearer file (or RMC_TOKEN)")
 	insecure := f.Bool("allow-insecure", false, "explicitly allow HTTP over a trusted private test network")
 	protocolVersion := f.String("protocol-version", "", "MCP protocol version to request (default latest SDK version)")
 	tool := f.String("tool", "list_devices", "tool name (call command)")
@@ -674,7 +685,7 @@ func serviceCommand(args []string) error {
 	f := flags("service " + args[0])
 	role := f.String("role", "", "hub or agent")
 	path := f.String("config", "", "absolute configuration path")
-	name := f.String("name", "", "service name starting with hostmcp-")
+	name := f.String("name", "", "service name starting with rmc- (or an existing hostmcp- name)")
 	system := f.Bool("system", false, "install or remove a system service (requires root)")
 	user := f.String("user", "", "OS account for a system service; requires --system")
 	if err := parse(f, args[1:]); err != nil {

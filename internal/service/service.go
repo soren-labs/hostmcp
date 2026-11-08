@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soren-labs/hostmcp/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
-const marker = "Managed by HostMCP"
+const marker = "Managed by RMC"
 
 func unitQuote(s string) string {
 	s = strings.ReplaceAll(s, "%", "%%")
@@ -59,8 +59,8 @@ func Render(goos, name, role, binary, configPath, home, path string) (string, er
 }
 
 func renderBase(goos, name, role, binary, configPath, home, path string) (string, error) {
-	if !config.ValidID(name) || !strings.HasPrefix(name, "hostmcp-") {
-		return "", errors.New("service name must start with hostmcp- and use letters, digits, dots, underscores or hyphens")
+	if !validName(name) {
+		return "", errors.New("service name must start with rmc- (or a legacy hostmcp- name) and use letters, digits, dots, underscores or hyphens")
 	}
 	if role != "agent" && role != "hub" {
 		return "", errors.New("role must be hub or agent")
@@ -80,11 +80,11 @@ func renderBase(goos, name, role, binary, configPath, home, path string) (string
 		}
 		// The agent intentionally has no filesystem/privilege sandbox: it acts as
 		// this user's normal account. Only the optional Hub container is isolated.
-		return fmt.Sprintf("# %s\n[Unit]\nDescription=HostMCP %s\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=exec\nExecStart=%s %s %s --config %s\nWorkingDirectory=%s\nEnvironment=%s\nEnvironment=%s\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=mixed\nUMask=0077\n\n[Install]\nWantedBy=default.target\n", marker, role, unitExecQuote(binary), role, action, unitExecQuote(configPath), unitDirectory(home), unitQuote("HOME="+home), unitQuote("PATH="+path)), nil
+		return fmt.Sprintf("# %s\n[Unit]\nDescription=RMC %s\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=exec\nExecStart=%s %s %s --config %s\nWorkingDirectory=%s\nEnvironment=%s\nEnvironment=%s\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=mixed\nUMask=0077\n\n[Install]\nWantedBy=default.target\n", marker, role, unitExecQuote(binary), role, action, unitExecQuote(configPath), unitDirectory(home), unitQuote("HOME="+home), unitQuote("PATH="+path)), nil
 	}
 	if goos == "darwin" {
-		label := "com.hostmcp." + name
-		logdir := filepath.Join(home, "Library", "Logs", "HostMCP")
+		label := launchdLabel(name)
+		logdir := userLogDir(home, name)
 		return fmt.Sprintf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<!-- %s -->\n<plist version=\"1.0\"><dict>\n<key>Label</key><string>%s</string>\n<key>ProgramArguments</key><array><string>%s</string><string>%s</string><string>%s</string><string>--config</string><string>%s</string></array>\n<key>WorkingDirectory</key><string>%s</string>\n<key>EnvironmentVariables</key><dict><key>HOME</key><string>%s</string><key>PATH</key><string>%s</string></dict>\n<key>RunAtLoad</key><true/>\n<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>\n<key>ThrottleInterval</key><integer>3</integer>\n<key>ExitTimeOut</key><integer>15</integer>\n<key>StandardOutPath</key><string>%s</string>\n<key>StandardErrorPath</key><string>%s</string>\n</dict></plist>\n", marker, xmlText(label), xmlText(binary), role, action, xmlText(configPath), xmlText(home), xmlText(home), xmlText(path), xmlText(filepath.Join(logdir, name+".log")), xmlText(filepath.Join(logdir, name+".log"))), nil
 	}
 	return "", errors.New("native services support Linux and macOS")
@@ -95,8 +95,8 @@ func unitPath(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !config.ValidID(name) || !strings.HasPrefix(name, "hostmcp-") {
-		return "", errors.New("invalid HostMCP service name")
+	if !validName(name) {
+		return "", errors.New("invalid RMC service name")
 	}
 	if runtime.GOOS == "linux" {
 		base := os.Getenv("XDG_CONFIG_HOME")
@@ -106,7 +106,7 @@ func unitPath(name string) (string, error) {
 		return filepath.Join(base, "systemd", "user", name+".service"), nil
 	}
 	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "LaunchAgents", "com.hostmcp."+name+".plist"), nil
+		return filepath.Join(home, "Library", "LaunchAgents", launchdLabel(name)+".plist"), nil
 	}
 	return "", errors.New("native services support Linux and macOS")
 }
@@ -223,7 +223,7 @@ func stopLaunchd(target string, run commandRun, query commandQuery) error {
 
 func Install(name, role, configPath string) error {
 	if name == "" {
-		name = "hostmcp-" + role
+		name = "rmc-" + role
 	}
 	abs, err := filepath.Abs(configPath)
 	if err != nil {
@@ -277,11 +277,11 @@ func Install(name, role, configPath string) error {
 	if runtime.GOOS == "linux" {
 		err = startSystemd(name, run, query)
 	} else {
-		if err = os.MkdirAll(filepath.Join(home, "Library", "Logs", "HostMCP"), 0700); err != nil {
+		if err = os.MkdirAll(userLogDir(home, name), 0700); err != nil {
 			return err
 		}
 		domain := "gui/" + strconv.Itoa(os.Getuid())
-		if err = run("launchctl", "enable", domain+"/com.hostmcp."+name); err == nil {
+		if err = run("launchctl", "enable", domain+"/"+launchdLabel(name)); err == nil {
 			err = run("launchctl", "bootstrap", domain, path)
 		}
 	}
@@ -307,15 +307,15 @@ func Uninstall(name string) error {
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(string(b), marker) {
-		return errors.New("refusing to remove a service not generated by HostMCP")
+	if !generated(string(b)) {
+		return errors.New("refusing to remove a service not generated by RMC")
 	}
 	if runtime.GOOS == "linux" {
 		if err = run("systemctl", "--user", "disable", "--now", name+".service"); err != nil {
 			return err
 		}
 	} else {
-		target := "gui/" + strconv.Itoa(os.Getuid()) + "/com.hostmcp." + name
+		target := "gui/" + strconv.Itoa(os.Getuid()) + "/" + launchdLabel(name)
 		if err = stopLaunchd(target, run, query); err != nil {
 			return err
 		}

@@ -38,13 +38,13 @@ session ID 都不是授权依据。配置与 token 文件使用 0600，所在目
 ## 撤销与轮换
 
 ```sh
-hostmcp token list --config /absolute/path/hub.json
-hostmcp token update --config /absolute/path/hub.json \
+rmc token list --config /absolute/path/hub.json
+rmc token update --config /absolute/path/hub.json \
   --id client --devices workstation-worker,mac-developer
-hostmcp token rotate --config /absolute/path/hub.json \
+rmc token rotate --config /absolute/path/hub.json \
   --id client --output /absolute/path/client-new.token
-hostmcp device revoke --config /absolute/path/hub.json --id ubuntu
-hostmcp token revoke --config /absolute/path/hub.json --id client
+rmc device revoke --config /absolute/path/hub.json --id ubuntu
+rmc token revoke --config /absolute/path/hub.json --id client
 ```
 
 只需访问部分设备的客户端，应把 --devices 设置为所需 ID 列表，避免通配符。
@@ -68,8 +68,8 @@ hostmcp token revoke --config /absolute/path/hub.json --id client
 检查，应保留两者。发布者应将 public-url 配为真实域名，不能通过任意请求的
 Host/X-Forwarded-Host 反推出可信身份。
 
-Cloudflare Tunnel 提供网络路径与 TLS，不自动提供 HostMCP 的用户授权。
-首版支持的默认组合是 named Tunnel 加 HostMCP bearer。v0.2.3 为 Hub `/mcp`
+Cloudflare Tunnel 提供网络路径与 TLS，不自动提供 RMC 的用户授权。
+首版支持的默认组合是 named Tunnel 加 RMC bearer。v0.2.3 为 Hub `/mcp`
 增加独立可选的 [Cloudflare Access Managed OAuth assertion 验证](cloudflare-access.md)：
 Hub 验证签名、issuer、应用 AUD 和有效时间后，将 email 映射到显式节点；不信任
 单独的邮箱 header。真实 ChatGPT/Access 登录仍未验收。Access 策略应限定在目标
@@ -79,7 +79,7 @@ MCP 路径；内置 agent、connect 和 agent enroll 仍不提供 Access 服务�
 
 已发布 v0.2.1 使用静态 bearer；新源码可选 [外部 OAuth 资源服务器](oauth.md)：
 提供 RFC 9728 元数据与 challenge，验证外部 issuer 的 RS256/ES256 JWT、audience、
-expiry 和 scope。授权服务器负责注册、PKCE、登录和刷新；HostMCP 不自建身份服务。
+expiry 和 scope。授权服务器负责注册、PKCE、登录和刷新；RMC 不自建身份服务。
 OAuth subject 与客户端 ID 的会话身份独立于 legacy owner；scope 不能授予节点，
 每个 subject 必须显式列出节点且不能使用 `*`。现有 bearer 和 agent 凭证保留。
 不能把这些能力等同于所有 SaaS MCP 宿主实测兼容。

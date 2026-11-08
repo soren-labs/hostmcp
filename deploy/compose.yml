@@ -6,12 +6,14 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         # Empty uses the version declared in the checked-out source.
-        VERSION: ${HOSTMCP_VERSION:-}
-    image: hostmcp:local
+        VERSION: ${RMC_VERSION:-${HOSTMCP_VERSION:-}}
+    image: rmc:local
     command: ["hub", "serve", "--config", "/state/hub.json"]
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
+      # Keeps the volume name used before the HostMCP -> RMC rename so
+      # existing deployments recreate the container with their hub.json.
       - hostmcp-state:/state
     read_only: true
     tmpfs:

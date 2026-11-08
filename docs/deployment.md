@@ -7,7 +7,7 @@
 | 小 VPS | Hub 原生服务或 Hub 容器；各设备原生 Agent | Caddy HTTPS 或 Cloudflare named Tunnel |
 | 家庭 Ubuntu | Hub 用户服务与 cloudflared；各设备原生 Agent | Cloudflare named Tunnel |
 | 家庭 Mac | Hub LaunchAgent 与 cloudflared；各设备原生 Agent | Cloudflare named Tunnel |
-| 单机使用 | hostmcp stdio | 不需要公开入口 |
+| 单机使用 | rmc stdio | 不需要公开入口 |
 
 所有 device Agent 都主动连接 Hub。设备无需公网 IP、SSH server 或路由器端口
 转发。Hub 的公开地址仍必须能从各设备及 MCP 客户端访问。
@@ -17,26 +17,26 @@ init、device invite、agent enroll/run 组成，本页补充网络与常驻服�
 
 ## 原生安装
 
-从源码构建或安装真实存在的 Release 后，将 hostmcp 放到用户可写的目录，例如
+从源码构建或安装真实存在的 Release 后，将 rmc 放到用户可写的目录，例如
 ~/.local/bin。Hub 与 Agent 使用独立的配置文件。推荐布局：
 
 | 文件 | 用途 |
 | --- | --- |
-| ~/.config/hostmcp/hub.json | Hub 配置与授权状态 |
-| ~/.config/hostmcp/owner.token | 所有者 MCP token |
-| ~/.config/hostmcp/agent.json | 本机 Agent 的连接配置 |
+| ~/.config/rmc/hub.json | Hub 配置与授权状态 |
+| ~/.config/rmc/owner.token | 所有者 MCP token |
+| ~/.config/rmc/agent.json | 本机 Agent 的连接配置 |
 | 临时目录中的 invite.json | 一次性设备邀请，使用后删除副本 |
 
 目录设置 0700，秘密文件设置 0600。不要把部署状态放进 Git checkout。通过
-hostmcp doctor 和 device_info 确认运行账户、主目录与实际环境。
+rmc doctor 和 device_info 确认运行账户、主目录与实际环境。
 
 Hub 若以独立服务账户运行，本机 `hub configure`、`device invite/revoke` 和
 `token create/update/rotate/revoke` 等管理命令也应使用该账户。例如：
 
 ```sh
-sudo -u hostmcp /usr/local/bin/hostmcp device invite \
-  --config /var/lib/hostmcp/hub.json --id workstation-worker --user worker \
-  --output /var/lib/hostmcp/workstation-worker-invite.json
+sudo -u rmc /usr/local/bin/rmc device invite \
+  --config /var/lib/rmc/hub.json --id workstation-worker --user worker \
+  --output /var/lib/rmc/workstation-worker-invite.json
 ```
 
 这样配置、锁文件和生成的邀请始终由 Hub 账户持有，配置目录也能保持正确权限。
@@ -51,13 +51,13 @@ sudo -u hostmcp /usr/local/bin/hostmcp device invite \
 2. 将域名（例如 mcp.example.com）指向该 tunnel。
 3. 将该域名的服务地址配置为 http://127.0.0.1:8787。
 4. 将 Hub 的 public-url 初始化为 https://mcp.example.com。
-5. 在独立网络上运行 hostmcp call，验证真实 HTTPS 入口。
-6. 配置 cloudflared 自身的服务启动；它与 HostMCP 是两个独立进程。
+5. 在独立网络上运行 rmc call，验证真实 HTTPS 入口。
+6. 配置 cloudflared 自身的服务启动；它与 RMC 是两个独立进程。
 
 如果先用回环地址测试、之后才确定域名，可修改已有 Hub 配置：
 
 ```sh
-hostmcp hub configure --config "$HOME/.config/hostmcp/hub.json" \
+rmc hub configure --config "$HOME/.config/rmc/hub.json" \
   --public-url https://mcp.example.com
 ```
 
@@ -71,10 +71,10 @@ hostmcp hub configure --config "$HOME/.config/hostmcp/hub.json" \
 账户信息。也可以在 Cloudflare dashboard 使用 remotely-managed tunnel，
 按照控制台给出的 service 命令配置。
 
-不要将 Cloudflare 的管理 API token 或 tunnel credential 当成 HostMCP bearer。
-首版的默认部署是 named Tunnel 加 HostMCP 自身的 bearer 验证。内置的 agent、
+不要将 Cloudflare 的管理 API token 或 tunnel credential 当成 RMC bearer。
+首版的默认部署是 named Tunnel 加 RMC 自身的 bearer 验证。内置的 agent、
 connect 和 agent enroll 尚不支持配置 Cloudflare Access 所需的服务凭证 headers。
-因此不要直接在整个 HostMCP 域名上开启要求 Access 服务凭证的策略，否则设备
+因此不要直接在整个 RMC 域名上开启要求 Access 服务凭证的策略，否则设备
 加入、WebSocket 连接和内置客户端都会被拦截。某个外部 MCP 客户端能够添加
 Access headers，不代表设备到 Hub 的整条链路已经兼容。邮箱登录页同样无法
 由这些自动化组件完成；需要 Access 的部署必须先提供并验证整条链路所需的
@@ -92,16 +92,16 @@ cloudflared tunnel --url 可以产生临时地址，但官方明确没有 uptime
 127.0.0.1:8787。示例见 [Caddyfile](../deploy/Caddyfile)：
 
 ```sh
-export HOSTMCP_DOMAIN=mcp.example.com
+export RMC_DOMAIN=mcp.example.com
 caddy run --config ./deploy/Caddyfile
 ```
 
 该方式需要域名解析、外部可达的 TLS 端口，以及满足 Caddy 证书获取方式的网络
-条件。Caddy 的安装和常驻服务管理使用其官方流程。HostMCP 不自动修改现有
+条件。Caddy 的安装和常驻服务管理使用其官方流程。RMC 不自动修改现有
 DNS、防火墙或占用中的反向代理配置。
 
 WebSocket Upgrade 必须能正常转发；不能把设备连接路径当成普通静态网页缓存。
-大命令要通过 HostMCP 的 session 查询输出，避免一个 HTTP 请求一直等到编译
+大命令要通过 RMC 的 session 查询输出，避免一个 HTTP 请求一直等到编译
 结束。Cloudflare 边缘更新或网络波动都可能断开 WebSocket，Agent 需要重连。
 连接恢复不保证重新派发一条命令安全，失败后先检查 session 和实际工作状态。
 
@@ -110,10 +110,10 @@ WebSocket Upgrade 必须能正常转发；不能把设备连接路径当成普�
 优先使用 CLI 生成与本机路径一致的服务：
 
 ```sh
-hostmcp service install --role hub \
-  --config "$HOME/.config/hostmcp/hub.json" --name hostmcp-hub
-hostmcp service install --role agent \
-  --config "$HOME/.config/hostmcp/agent.json" --name hostmcp-agent
+rmc service install --role hub \
+  --config "$HOME/.config/rmc/hub.json" --name rmc-hub
+rmc service install --role agent \
+  --config "$HOME/.config/rmc/agent.json" --name rmc-agent
 ```
 
 只安装这台机器需要的角色。Hub 不会自动成为可执行设备。
@@ -121,9 +121,9 @@ hostmcp service install --role agent \
 用户服务使用它们；系统服务使用下方 `--system` 方式生成。
 
 ```sh
-systemctl --user status hostmcp-hub
-journalctl --user -u hostmcp-hub -n 100
-systemctl --user restart hostmcp-agent
+systemctl --user status rmc-hub
+journalctl --user -u rmc-hub -n 100
+systemctl --user restart rmc-agent
 ```
 
 如果需要用户注销后仍运行、并在开机时启动用户 manager，管理员可为该用户启用
@@ -142,9 +142,9 @@ Agent unit 不添加限制其用户原有文件能力的 ProtectHome/动态用�
 [launchd 模板](../deploy/launchd/)。plist 中的路径必须是真实绝对路径；launchd
 不会替换其中的 $HOME 或波浪号。使用模板前创建日志目录并替换 /Users/YOU。
 
-CLI 生成的 label 为 com.hostmcp.hostmcp-hub 或 com.hostmcp.hostmcp-agent
+CLI 生成的 label 为 com.rmc.rmc-hub 或 com.rmc.rmc-agent
 （自定义 --name 时替换最后一段）。可使用 launchctl print gui/UID/LABEL
-检查状态。仓库中的 io.hostmcp.* plist 是手工安装示例，label 与 CLI 生成物不同；
+检查状态。仓库中的 io.rmc.* plist 是手工安装示例，label 与 CLI 生成物不同；
 手工安装的服务应使用 launchctl bootout 和删除该 plist 的方式移除。
 
 LaunchAgent 与用户登录会话关联。不要将它描述成在 FileVault 尚未解锁、用户
@@ -161,11 +161,11 @@ v0.2.1 可由管理员安装 systemd system service 或 macOS LaunchDaemon。执
 和配置文件，完整注册过程见[账户节点与权限配置](account-nodes.md)。
 
 ```sh
-sudo /usr/local/bin/hostmcp service install --system --user worker \
-  --role agent --config /home/worker/.config/hostmcp/agent.json \
-  --name hostmcp-worker
-sudo /usr/local/bin/hostmcp service install --system --user root \
-  --role agent --config /var/lib/hostmcp/root.json --name hostmcp-root
+sudo /usr/local/bin/rmc service install --system --user worker \
+  --role agent --config /home/worker/.config/rmc/agent.json \
+  --name rmc-worker
+sudo /usr/local/bin/rmc service install --system --user root \
+  --role agent --config /var/lib/rmc/root.json --name rmc-root
 ```
 
 macOS 将示例中的普通用户名称和主目录换成实际账户；系统服务不要使用仅该用户
@@ -178,15 +178,15 @@ macOS 将示例中的普通用户名称和主目录换成实际账户；系统�
 服务安装拒绝覆盖已存在的 unit；升级时在原路径替换二进制，再重启已有服务。
 
 Linux 系统服务使用 `systemctl status NAME`、`journalctl -u NAME` 检查；macOS
-系统服务使用 `launchctl print system/com.hostmcp.NAME` 检查。系统服务的卸载
+系统服务使用 `launchctl print system/com.rmc.NAME` 检查。系统服务的卸载
 也明确传入 `--system`，不会自动删除同名用户服务或配置文件：
 
 ```sh
-sudo /usr/local/bin/hostmcp service uninstall --system --name hostmcp-root
+sudo /usr/local/bin/rmc service uninstall --system --name rmc-root
 ```
 
-macOS 系统服务日志位于 `/Library/Logs/HostMCP/NAME/service.log`，用户服务日志
-位于 `~/Library/Logs/HostMCP/NAME.log`。卸载可重复执行，保留配置和日志；它不
+macOS 系统服务日志位于 `/Library/Logs/RMC/NAME/service.log`，用户服务日志
+位于 `~/Library/Logs/RMC/NAME.log`。卸载可重复执行，保留配置和日志；它不
 代替在 Hub 上撤销设备凭证。
 
 ## 容器部署 Hub
@@ -196,7 +196,7 @@ macOS 系统服务日志位于 `/Library/Logs/HostMCP/NAME/service.log`，用户
 
 镜像构建需要 BuildKit（安装 `docker buildx` 插件；Docker Desktop 已自带）。旧版
 构建器不支持 Dockerfile 中的 `$BUILDPLATFORM`，会报 `failed to parse platform`。
-不设置 `HOSTMCP_VERSION` 时，镜像报告源码中声明的版本。
+不设置 `RMC_VERSION` 时，镜像报告源码中声明的版本。
 
 ```sh
 docker compose -f deploy/compose.yml build
@@ -222,8 +222,8 @@ docker compose -f deploy/compose.yml down
 
 ## 独立组件、OAuth 与可选更新
 
-新源码的 `hostmcp-hub` 与 `hostmcp-agent` 有独立产物和安装路径；兼容二进制
-`hostmcp` 保留。Hub 认证、元数据和路由升级保持 wire v1 时，无需重新部署每个
+新源码的 `rmc-hub` 与 `rmc-agent` 有独立产物和安装路径；兼容二进制
+`rmc` 保留。Hub 认证、元数据和路由升级保持 wire v1 时，无需重新部署每个
 Agent。新原生工具或执行器修复仍需要 Agent 更新。版本合同、健康字段、批次
 升级、离线归档校验、回滚与 systemd/launchd 重启命令见
 [组件兼容与更新](components-updates.md)。该文档区分已运行版本与磁盘上的新文件。
@@ -245,12 +245,12 @@ Agent 不接受 OAuth 客户端凭证，也无需重新注册。反向代理必�
 撤销设备和 token 的命令见 [security.md](security.md)。卸载用户服务：
 
 ```sh
-hostmcp service uninstall --name hostmcp-agent
-hostmcp service uninstall --name hostmcp-hub
+rmc service uninstall --name rmc-agent
+rmc service uninstall --name rmc-hub
 ```
 
 服务卸载与删除二进制、配置文件是不同操作。确认不再需要后，用户可移除自己
-创建的 HostMCP 配置和可执行文件。若还使用 Cloudflare Tunnel，独立停止其服务
+创建的 RMC 配置和可执行文件。若还使用 Cloudflare Tunnel，独立停止其服务
 并清理对应发布配置；不要删除其他应用共享的 tunnel 或 DNS 记录。
 
 ## 参考

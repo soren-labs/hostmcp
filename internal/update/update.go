@@ -24,11 +24,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/soren-labs/hostmcp/internal/config"
-	"github.com/soren-labs/hostmcp/internal/protocol"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
-const releaseSource = "https://github.com/soren-labs/hostmcp/releases/download/"
+const releaseSource = "https://github.com/soren-labs/rmc/releases/download/"
 const maxArchive = 128 << 20
 const maxBinary = 64 << 20
 
@@ -92,7 +92,7 @@ func Load(file string) (Policy, error) {
 	return p, err
 }
 func Asset(version string) string {
-	return fmt.Sprintf("hostmcp-agent_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("rmc-agent_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
 }
 func releaseURL(p Policy) string {
 	return releaseSource + "v" + p.TargetVersion + "/" + Asset(p.TargetVersion)
@@ -247,11 +247,11 @@ func extract(archive *os.File, out *os.File) error {
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
 			return errors.New("archive links and special files are refused")
 		}
-		if name != "hostmcp-agent" {
+		if name != "rmc-agent" {
 			continue
 		}
 		if found || header.Typeflag != tar.TypeReg {
-			return errors.New("archive must contain exactly one regular hostmcp-agent")
+			return errors.New("archive must contain exactly one regular rmc-agent")
 		}
 		found = true
 		if _, err = io.Copy(out, reader); err != nil {
@@ -324,7 +324,7 @@ func Apply(ctx context.Context, p Policy, archive io.Reader) (bool, error) {
 		return false, nil
 	}
 	dir := filepath.Dir(p.Binary)
-	compressed, err := os.CreateTemp(dir, ".hostmcp-archive-*")
+	compressed, err := os.CreateTemp(dir, ".rmc-archive-*")
 	if err != nil {
 		return false, err
 	}
@@ -338,7 +338,7 @@ func Apply(ctx context.Context, p Policy, archive io.Reader) (bool, error) {
 	if n > maxArchive || !strings.EqualFold(hex.EncodeToString(digest.Sum(nil)), p.SHA256) {
 		return false, errors.New("archive SHA-256 mismatch or size exceeded; binary unchanged")
 	}
-	staged, err := os.CreateTemp(dir, ".hostmcp-agent-*")
+	staged, err := os.CreateTemp(dir, ".rmc-agent-*")
 	if err != nil {
 		return false, err
 	}
