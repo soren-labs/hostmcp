@@ -24,7 +24,7 @@ done
 go mod download all
 release_commit="$(git rev-parse --short=12 HEAD)"
 release_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/roost-release.XXXXXX")"
+temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/rmc-release.XXXXXX")"
 trap 'rm -rf "$temp_dir"' EXIT
 
 # A statically linked binary still needs its dependency copyright/license notices.
@@ -70,13 +70,13 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
   target_os="${target%/*}"
   target_arch="${target#*/}"
   for role in all hub agent; do
-    executable=roost
-    if [[ "$role" != all ]]; then executable="roost-$role"; fi
+    executable=rmc
+    if [[ "$role" != all ]]; then executable="rmc-$role"; fi
     package_dir="$temp_dir/${executable}_${target_os}_${target_arch}"
     mkdir -p "$package_dir"
     CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath \
-      -ldflags "-s -w -X main.version=$release_version -X github.com/soren-labs/roost/internal/protocol.Version=$release_version -X main.component=$role -X main.commit=$release_commit -X main.buildTime=$release_time" \
-      -o "$package_dir/$executable" ./cmd/roost
+      -ldflags "-s -w -X main.version=$release_version -X github.com/soren-labs/rmc/internal/protocol.Version=$release_version -X main.component=$role -X main.commit=$release_commit -X main.buildTime=$release_time" \
+      -o "$package_dir/$executable" ./cmd/rmc
     cp LICENSE "$package_dir/"
     cp README.md README.zh-CN.md "$package_dir/"
     cp -R docs "$package_dir/docs"
@@ -86,7 +86,7 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
       "$executable" LICENSE README.md README.zh-CN.md docs licenses
     if [[ "$role" == agent ]]; then
       # Agents released as HostMCP (v0.2.x) self-update from hostmcp-agent_*
-      # archives that contain a hostmcp-agent binary. Ship the same Roost agent
+      # archives that contain a hostmcp-agent binary. Ship the same RMC agent
       # under that legacy name so they can cross the rename in place.
       legacy_dir="$temp_dir/hostmcp-agent_${target_os}_${target_arch}"
       mkdir -p "$legacy_dir"
@@ -105,7 +105,7 @@ import sys
 
 folder = pathlib.Path(sys.argv[1])
 version = sys.argv[2]
-names = [f"{component}_{version}_{os}_{arch}.tar.gz" for component in ("roost", "roost-hub", "roost-agent", "hostmcp-agent") for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
+names = [f"{component}_{version}_{os}_{arch}.tar.gz" for component in ("rmc", "rmc-hub", "rmc-agent", "hostmcp-agent") for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
 lines = []
 for name in names:
     digest = hashlib.sha256()
@@ -115,4 +115,4 @@ for name in names:
     lines.append(f"{digest.hexdigest()}  {name}\n")
 (folder / "SHA256SUMS").write_text("".join(lines))
 PY
-printf 'Built Roost %s (%s) in %s\n' "$release_version" "$release_commit" "$output_dir"
+printf 'Built RMC %s (%s) in %s\n' "$release_version" "$release_commit" "$output_dir"

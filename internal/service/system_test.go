@@ -14,7 +14,7 @@ import (
 
 func TestSystemUnitUsesExplicitAccount(t *testing.T) {
 	a := account{name: "developer", home: "/home/developer", shell: "/bin/bash", uid: 1234, gid: 1235}
-	body, err := renderSystem("linux", "roost-dev", "agent", "/usr/local/bin/roost", "/home/developer/.config/roost/agent.json", a)
+	body, err := renderSystem("linux", "rmc-dev", "agent", "/usr/local/bin/rmc", "/home/developer/.config/rmc/agent.json", a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestSystemUnitUsesExplicitAccount(t *testing.T) {
 			t.Fatalf("agent received an extra privilege restriction: %s", restriction)
 		}
 	}
-	rootBody, err := renderSystem("linux", "roost-root", "agent", "/usr/local/bin/roost", "/etc/roost/root.json", account{name: "root", home: "/root", shell: "/bin/bash"})
+	rootBody, err := renderSystem("linux", "rmc-root", "agent", "/usr/local/bin/rmc", "/etc/rmc/root.json", account{name: "root", home: "/root", shell: "/bin/bash"})
 	if err != nil || !strings.Contains(rootBody, "User=0\nGroup=0\n") {
 		t.Fatalf("root account not explicit: %v\n%s", err, rootBody)
 	}
@@ -36,7 +36,7 @@ func TestSystemUnitUsesExplicitAccount(t *testing.T) {
 
 func TestLaunchDaemonCarriesAccountAndEscapesPaths(t *testing.T) {
 	a := account{name: "developer", home: "/Users/developer", shell: "/bin/zsh", uid: 501, gid: 20}
-	body, err := renderSystem("darwin", "roost-dev", "agent", "/Applications/A & B/roost", "/Users/developer/config.json", a)
+	body, err := renderSystem("darwin", "rmc-dev", "agent", "/Applications/A & B/rmc", "/Users/developer/config.json", a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestLaunchDaemonCarriesAccountAndEscapesPaths(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, expected := range []string{"A &amp; B", "<key>UserName</key><string>developer</string>", "/Library/Logs/Roost/roost-dev/service.log", "<key>SHELL</key><string>/bin/zsh</string>"} {
+	for _, expected := range []string{"A &amp; B", "<key>UserName</key><string>developer</string>", "/Library/Logs/RMC/rmc-dev/service.log", "<key>SHELL</key><string>/bin/zsh</string>"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("launch daemon lost %q", expected)
 		}
@@ -58,27 +58,27 @@ func TestLaunchDaemonCarriesAccountAndEscapesPaths(t *testing.T) {
 }
 
 func TestSystemServiceValidationBeforeMutation(t *testing.T) {
-	if err := InstallWithOptions("roost-test", "agent", "missing", Options{User: "root"}); err == nil {
+	if err := InstallWithOptions("rmc-test", "agent", "missing", Options{User: "root"}); err == nil {
 		t.Fatal("--user without --system accepted")
 	}
-	if err := UninstallWithOptions("roost-test", Options{User: "root"}); err == nil {
+	if err := UninstallWithOptions("rmc-test", Options{User: "root"}); err == nil {
 		t.Fatal("uninstall accepted irrelevant --user")
 	}
 	if os.Geteuid() != 0 {
-		if err := InstallWithOptions("roost-test", "agent", "missing", Options{System: true}); err == nil || !strings.Contains(err.Error(), "requires root") {
+		if err := InstallWithOptions("rmc-test", "agent", "missing", Options{System: true}); err == nil || !strings.Contains(err.Error(), "requires root") {
 			t.Fatalf("system install did not reject unelevated caller: %v", err)
 		}
 	}
-	for _, name := range []string{"sshd", "../roost-agent", "roost-bad\nUser=root"} {
+	for _, name := range []string{"sshd", "../rmc-agent", "rmc-bad\nUser=root"} {
 		if _, err := systemUnitPath("linux", name); err == nil {
-			t.Fatalf("accepted non-Roost unit name %q", name)
+			t.Fatalf("accepted non-RMC unit name %q", name)
 		}
 	}
 }
 
 func TestSystemdSystemScope(t *testing.T) {
 	var calls [][]string
-	err := startSystemdScoped("roost-system-test", true, func(_ string, args ...string) error {
+	err := startSystemdScoped("rmc-system-test", true, func(_ string, args ...string) error {
 		calls = append(calls, args)
 		return nil
 	}, func(_ string, args ...string) ([]byte, error) {
@@ -108,11 +108,11 @@ func TestSystemdParsesSystemAccountUnit(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	body, err := renderSystem("linux", "roost-system-parser", "agent", binary, filepath.Join(dir, "config.json"), account{name: "test", home: dir, shell: "/bin/sh", uid: uint32(os.Getuid()), gid: uint32(os.Getgid())})
+	body, err := renderSystem("linux", "rmc-system-parser", "agent", binary, filepath.Join(dir, "config.json"), account{name: "test", home: dir, shell: "/bin/sh", uid: uint32(os.Getuid()), gid: uint32(os.Getgid())})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "roost-system-parser.service")
+	path := filepath.Join(dir, "rmc-system-parser.service")
 	if err = os.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestSystemdParsesSystemAccountUnit(t *testing.T) {
 func TestUninstallMissingUserServiceIsIdempotent(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	name := fmt.Sprintf("roost-not-installed-%d", os.Getpid())
+	name := fmt.Sprintf("rmc-not-installed-%d", os.Getpid())
 	if err := Uninstall(name); err != nil {
 		t.Fatalf("uninstall of missing service failed: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestDarwinRootChecksTargetAccountPermissions(t *testing.T) {
 	}
 	// t.TempDir nests under a root-only test parent, which would hide the
 	// account-owned fixture before the intended file permission check.
-	dir, err := os.MkdirTemp("/private/tmp", "roost-account-access-")
+	dir, err := os.MkdirTemp("/private/tmp", "rmc-account-access-")
 	if err != nil {
 		t.Fatal(err)
 	}

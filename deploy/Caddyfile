@@ -1,6 +1,6 @@
-# Set ROOST_DOMAIN to the same hostname as the Hub public-url.
-# Example: ROOST_DOMAIN=mcp.example.com caddy run --config deploy/Caddyfile
-{$ROOST_DOMAIN} {
+# Set RMC_DOMAIN to the same hostname as the Hub public-url.
+# Example: RMC_DOMAIN=mcp.example.com caddy run --config deploy/Caddyfile
+{$RMC_DOMAIN} {
     log {
         output file /var/log/caddy/access.log {
             roll_size 20mb

@@ -1,6 +1,6 @@
 # Security policy
 
-Roost gives MCP clients the native authority of the OS accounts that run its
+RMC gives MCP clients the native authority of the OS accounts that run its
 Agents. Security bugs can therefore expose remote command execution, so please
 report them privately.
 
@@ -17,11 +17,11 @@ patched; upgrade to the latest release.
 ## Reporting a vulnerability
 
 Use GitHub private vulnerability reporting:
-<https://github.com/soren-labs/roost/security/advisories/new>
+<https://github.com/soren-labs/rmc/security/advisories/new>
 
 Please include:
 
-- the Roost version (`roost version`) and component (hub, agent or all);
+- the RMC version (`rmc version`) and component (hub, agent or all);
 - the operating system, deployment shape (direct HTTPS, Cloudflare Tunnel,
   Docker Hub, stdio) and authentication mode (bearer, OAuth, Cloudflare Access);
 - minimal reproduction steps.
@@ -49,7 +49,7 @@ In scope — for example:
 Out of scope — these are the documented design:
 
 - an authorized client running any command or reading any file that the node's
-  OS account can access. Roost intentionally has no directory or command
+  OS account can access. RMC intentionally has no directory or command
   allowlist; see [docs/security.md](docs/security.md);
 - privileges the OS account already has (sudo, Docker socket, admin groups);
 - denial of service by a client holding a valid credential, within the

@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 const (
@@ -59,7 +59,7 @@ func NewForDevice(deviceID string) (*Runtime, error) {
 		deviceID = "local"
 	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		return nil, errors.New("Roost supports Linux and macOS")
+		return nil, errors.New("RMC supports Linux and macOS")
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

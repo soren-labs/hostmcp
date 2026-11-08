@@ -24,7 +24,7 @@ func checkRole(role, command string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("command %q is unavailable in roost-%s; use the matching component or roost compatibility binary", command, role)
+	return fmt.Errorf("command %q is unavailable in rmc-%s; use the matching component or rmc compatibility binary", command, role)
 }
 
 func roleUsage(role string) string {
@@ -35,11 +35,11 @@ func roleUsage(role string) string {
 	filtered := make([]string, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "roost" {
+		if len(fields) >= 2 && fields[0] == "rmc" {
 			if checkRole(role, fields[1]) != nil {
 				continue
 			}
-			line = strings.Replace(line, "roost ", "roost-"+role+" ", 1)
+			line = strings.Replace(line, "rmc ", "rmc-"+role+" ", 1)
 		}
 		filtered = append(filtered, line)
 	}

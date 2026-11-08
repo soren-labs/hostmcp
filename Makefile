@@ -1,12 +1,12 @@
 GO ?= go
-BINARY ?= build/roost
+BINARY ?= build/rmc
 
 .PHONY: all build fmt vet lint test smoke vuln check clean
 
 all: check
 
 build:
-	$(GO) build -trimpath -o $(BINARY) ./cmd/roost
+	$(GO) build -trimpath -o $(BINARY) ./cmd/rmc
 
 # Fails if any Go file needs gofmt.
 fmt:

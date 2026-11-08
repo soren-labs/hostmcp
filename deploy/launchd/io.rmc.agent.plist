@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>io.roost.hub</string>
+  <key>Label</key><string>io.rmc.agent</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOU/.local/bin/roost</string>
-    <string>hub</string><string>serve</string>
-    <string>--config</string><string>/Users/YOU/.config/roost/hub.json</string>
+    <string>/Users/YOU/.local/bin/rmc</string>
+    <string>agent</string><string>run</string>
+    <string>--config</string><string>/Users/YOU/.config/rmc/agent.json</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/YOU</string>
   <key>EnvironmentVariables</key>
@@ -18,7 +18,7 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>5</integer>
-  <key>StandardOutPath</key><string>/Users/YOU/Library/Logs/Roost/hub.stdout.log</string>
-  <key>StandardErrorPath</key><string>/Users/YOU/Library/Logs/Roost/hub.stderr.log</string>
+  <key>StandardOutPath</key><string>/Users/YOU/Library/Logs/RMC/agent.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOU/Library/Logs/RMC/agent.stderr.log</string>
 </dict>
 </plist>

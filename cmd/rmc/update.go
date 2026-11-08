@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/soren-labs/roost/internal/update"
+	"github.com/soren-labs/rmc/internal/update"
 )
 
 func updateCommand(ctx context.Context, args []string) error {

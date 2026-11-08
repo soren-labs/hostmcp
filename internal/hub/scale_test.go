@@ -20,21 +20,21 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/roost/internal/client"
-	"github.com/soren-labs/roost/internal/config"
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/client"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 // TestScaleAccountNodes is opt-in: normal CI does not start hundreds of sockets.
 // It launches a separate, temporary Hub, never an existing deployment. Nodes are
 // simulated protocol peers, not real hosts or native OS-account executors.
 //
-//	ROOST_SCALE_BINARY="$PWD/build/roost" go test ./internal/hub \
+//	RMC_SCALE_BINARY="$PWD/build/rmc" go test ./internal/hub \
 //	  -run '^TestScaleAccountNodes$' -count=1 -v -timeout=2m
 func TestScaleAccountNodes(t *testing.T) {
-	binary := os.Getenv("ROOST_SCALE_BINARY")
+	binary := os.Getenv("RMC_SCALE_BINARY")
 	if binary == "" {
-		t.Skip("set ROOST_SCALE_BINARY to an existing roost executable for 200-node verification")
+		t.Skip("set RMC_SCALE_BINARY to an existing rmc executable for 200-node verification")
 	}
 	binary, err := filepath.Abs(binary)
 	if err != nil {
@@ -216,7 +216,7 @@ func TestScaleAccountNodes(t *testing.T) {
 		"reconnected_nodes": reconnectCount, "post_reconnect_routes": reconnectCount,
 		"seconds": time.Since(started).Seconds(), "hub_resources": <-samplesDone}
 	encoded, _ := json.Marshal(report)
-	t.Logf("ROOST_SCALE_REPORT %s", encoded)
+	t.Logf("RMC_SCALE_REPORT %s", encoded)
 }
 
 func parallelScale(t *testing.T, count, concurrency int, action func(int) error) {

@@ -1,4 +1,4 @@
-module github.com/soren-labs/roost
+module github.com/soren-labs/rmc
 
 go 1.25.0
 

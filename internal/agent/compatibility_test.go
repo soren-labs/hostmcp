@@ -9,9 +9,9 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/soren-labs/roost/internal/config"
-	"github.com/soren-labs/roost/internal/protocol"
-	"github.com/soren-labs/roost/internal/testutil"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
+	"github.com/soren-labs/rmc/internal/testutil"
 )
 
 func TestCompatibilityNewAgentWithLegacyHub(t *testing.T) {

@@ -1,6 +1,6 @@
-# Roost — notes for coding agents
+# RMC — notes for coding agents
 
-Roost is a self-hosted MCP gateway for Linux and macOS, written in Go. A Hub
+RMC is a self-hosted MCP gateway for Linux and macOS, written in Go. A Hub
 authenticates MCP clients and routes tool calls over outbound WebSocket
 connections to native device Agents. Each Agent runs as one OS account and its
 tools act with that account's ordinary privileges.
@@ -9,7 +9,7 @@ tools act with that account's ordinary privileges.
 
 | Path | Purpose |
 | --- | --- |
-| `cmd/roost` | CLI entry point: `hub`, `device`, `token`, `agent`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `agent` variant. |
+| `cmd/rmc` | CLI entry point: `hub`, `device`, `token`, `agent`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `agent` variant. |
 | `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing. Never executes commands. |
 | `internal/agent` | Outbound Agent connection loop with heartbeats and reconnect backoff. |
 | `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `write_file`, `apply_patch`, `view_image`. |
@@ -27,7 +27,7 @@ tools act with that account's ordinary privileges.
 
 ```sh
 make check        # gofmt, vet, lint, race tests, stdio smoke test
-make build        # ./build/roost
+make build        # ./build/rmc
 ```
 
 `make lint` needs [golangci-lint](https://golangci-lint.run/) v2. The underlying

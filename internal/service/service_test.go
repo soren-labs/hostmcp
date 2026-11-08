@@ -14,7 +14,7 @@ import (
 )
 
 func TestRenderPreservesLiteralPaths(t *testing.T) {
-	x, err := Render("linux", "roost-agent", "agent", "/home/test/My tools/roost", "/home/test/100% safe/config.json", "/home/test", "/bin:/opt/a b/bin")
+	x, err := Render("linux", "rmc-agent", "agent", "/home/test/My tools/rmc", "/home/test/100% safe/config.json", "/home/test", "/bin:/opt/a b/bin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestRenderPreservesLiteralPaths(t *testing.T) {
 	if strings.Contains(x, "NoNewPrivileges") || strings.Contains(x, "ProtectHome") || strings.Contains(x, "UMask=0077") {
 		t.Fatal("agent's normal user privileges restricted")
 	}
-	p, err := Render("darwin", "roost-agent", "agent", "/Users/test/A & B/roost", "/Users/test/cfg.json", "/Users/test", "/bin")
+	p, err := Render("darwin", "rmc-agent", "agent", "/Users/test/A & B/rmc", "/Users/test/cfg.json", "/Users/test", "/bin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,13 +44,13 @@ func TestRenderPreservesLiteralPaths(t *testing.T) {
 	if !strings.Contains(p, "A &amp; B") {
 		t.Fatal("plist path not escaped")
 	}
-	if _, err := Render("linux", "sshd", "hub", "/bin/roost", "/tmp/a", "/home/test", "/bin"); err == nil {
+	if _, err := Render("linux", "sshd", "hub", "/bin/rmc", "/tmp/a", "/home/test", "/bin"); err == nil {
 		t.Fatal("unrelated service name accepted")
 	}
 }
 
 func TestReviewSystemdExecEscapesDollarLiterals(t *testing.T) {
-	unit, err := Render("linux", "roost-audit", "agent", "/bin/$BIN", "/tmp/${HOME} $$ spaced%path.json", "/home/a", "/bin")
+	unit, err := Render("linux", "rmc-audit", "agent", "/bin/$BIN", "/tmp/${HOME} $$ spaced%path.json", "/home/a", "/bin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,12 +63,12 @@ func TestReviewSystemdExecEscapesDollarLiterals(t *testing.T) {
 }
 
 func TestServiceCarriesLoginShell(t *testing.T) {
-	unit, _ := Render("linux", "roost-agent", "agent", "/bin/roost", "/tmp/cfg", "/home/test", "/bin")
+	unit, _ := Render("linux", "rmc-agent", "agent", "/bin/rmc", "/tmp/cfg", "/home/test", "/bin")
 	unit, err := withShell("linux", unit, "/bin/bash")
 	if err != nil || !strings.Contains(unit, `Environment="SHELL=/bin/bash"`) {
 		t.Fatal("service lost SHELL")
 	}
-	plist, _ := Render("darwin", "roost-agent", "agent", "/bin/roost", "/tmp/cfg", "/Users/test", "/bin")
+	plist, _ := Render("darwin", "rmc-agent", "agent", "/bin/rmc", "/tmp/cfg", "/Users/test", "/bin")
 	plist, err = withShell("darwin", plist, "/bin/zsh")
 	if err != nil || !strings.Contains(plist, "<key>SHELL</key><string>/bin/zsh</string>") {
 		t.Fatal("LaunchAgent lost SHELL")
@@ -96,11 +96,11 @@ func TestSystemdParsesLiteralWorkingDirectory(t *testing.T) {
 			if err := os.Mkdir(home, 0700); err != nil {
 				t.Fatal(err)
 			}
-			body, err := Render("linux", "roost-service-audit", "agent", binary, filepath.Join(home, "config.json"), home, "/usr/bin:/bin")
+			body, err := Render("linux", "rmc-service-audit", "agent", binary, filepath.Join(home, "config.json"), home, "/usr/bin:/bin")
 			if err != nil {
 				t.Fatal(err)
 			}
-			path := filepath.Join(dir, "roost-service-audit.service")
+			path := filepath.Join(dir, "rmc-service-audit.service")
 			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -139,7 +139,7 @@ func TestSystemdStartupChecksManagerState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			commands := 0
-			err := startSystemd("roost-audit", func(string, ...string) error {
+			err := startSystemd("rmc-audit", func(string, ...string) error {
 				commands++
 				return nil // enable --now can exit zero despite a failed unit.
 			}, func(string, ...string) ([]byte, error) {
@@ -176,7 +176,7 @@ func TestLaunchdCleanupRequiresConfirmedAbsence(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			queried, booted := 0, false
-			err := stopLaunchd("gui/501/com.roost.roost-audit", func(_ string, args ...string) error {
+			err := stopLaunchd("gui/501/com.rmc.rmc-audit", func(_ string, args ...string) error {
 				if len(args) != 2 || args[0] != "bootout" {
 					t.Fatal("unexpected launchctl mutation", args)
 				}
@@ -204,7 +204,7 @@ func TestUninstallNeverLoadedLaunchAgent(t *testing.T) {
 	// Only a generated file below the private test HOME is created. This service
 	// is never bootstrapped; print only confirms this unique label is absent.
 	t.Setenv("HOME", t.TempDir())
-	name := fmt.Sprintf("roost-unloaded-audit-%d", time.Now().UnixNano())
+	name := fmt.Sprintf("rmc-unloaded-audit-%d", time.Now().UnixNano())
 	path, err := unitPath(name)
 	if err != nil {
 		t.Fatal(err)

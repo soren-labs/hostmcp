@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 func testHub(t *testing.T) (string, *config.Store) {
@@ -157,7 +157,7 @@ func TestDeviceInviteBindsExpectedAccount(t *testing.T) {
 func TestDefaultFileFallsBackToLegacyHostMCPDirectory(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	current := filepath.Join(home, ".config", "roost", "agent.json")
+	current := filepath.Join(home, ".config", "rmc", "agent.json")
 	legacy := filepath.Join(home, ".config", "hostmcp", "agent.json")
 	if got := defaultFile("agent.json"); got != current {
 		t.Fatalf("fresh install default = %q, want %q", got, current)

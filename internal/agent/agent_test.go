@@ -12,8 +12,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/soren-labs/roost/internal/config"
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 func TestReviewAuthorizationRejectionBacksOffWithoutRestartLoop(t *testing.T) {

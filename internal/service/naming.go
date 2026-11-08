@@ -4,15 +4,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 // Services installed before the project was renamed from HostMCP keep their
-// original unit names, launchd labels, log directories and file markers. Roost
+// original unit names, launchd labels, log directories and file markers. RMC
 // still recognises them so existing services can be removed and reinstalled
 // under the same name without a manual cleanup step.
 const (
-	namePrefix   = "roost-"
+	namePrefix   = "rmc-"
 	legacyPrefix = "hostmcp-"
 	legacyMarker = "Managed by HostMCP"
 )
@@ -30,7 +30,7 @@ func launchdLabel(name string) string {
 	if legacyName(name) {
 		return "com.hostmcp." + name
 	}
-	return "com.roost." + name
+	return "com.rmc." + name
 }
 
 // logDirName returns the directory under Library/Logs used by a service.
@@ -38,10 +38,10 @@ func logDirName(name string) string {
 	if legacyName(name) {
 		return "HostMCP"
 	}
-	return "Roost"
+	return "RMC"
 }
 
-// generated reports whether a unit or plist was written by Roost or by
+// generated reports whether a unit or plist was written by RMC or by
 // HostMCP before the rename.
 func generated(body string) bool {
 	return strings.Contains(body, marker) || strings.Contains(body, legacyMarker)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify two MCP credentials against root and ordinary nodes on the same host.
 
-This uses actual MCP calls through the roost CLI, never SSH. Both nodes must
+This uses actual MCP calls through the rmc CLI, never SSH. Both nodes must
 already be online. The admin token must reach the root node; the ordinary token
 must reach only the ordinary node. A root-owned temporary fixture is created and
 removed through MCP. No token contents are read or printed by this script.
@@ -26,7 +26,7 @@ check, unpack = _smoke["check"], _smoke["unpack"]
 
 def fixture_path(path):
     return (posixpath.normpath(path) == path and posixpath.dirname(path) == "/tmp"
-            and posixpath.basename(path).startswith("roost-access."))
+            and posixpath.basename(path).startswith("rmc-access."))
 
 
 class AccessClient:
@@ -109,15 +109,15 @@ def run(args):
         check(denied.get("isError") is True, "ordinary credential could execute on root node")
         report["checks"].append("cross_node_execution_denied")
 
-        fixture = admin.execute(args.root_node, "mktemp -d /tmp/roost-access.XXXXXXXX")
+        fixture = admin.execute(args.root_node, "mktemp -d /tmp/rmc-access.XXXXXXXX")
         check(fixture_path(fixture), "unexpected fixture directory")
         quoted_dir = shlex.quote(fixture)
         path = fixture + "/root-only.txt"
         quoted_path = shlex.quote(path)
-        admin.execute(args.root_node, "chmod 755 " + quoted_dir + "; printf roost-native-root > "
+        admin.execute(args.root_node, "chmod 755 " + quoted_dir + "; printf rmc-native-root > "
                       + quoted_path + "; chmod 600 " + quoted_path)
         root_read = admin.call("read", device=args.root_node, paths=[path])
-        check(root_read["entries"][0].get("content") == "roost-native-root", "root fixture read failed")
+        check(root_read["entries"][0].get("content") == "rmc-native-root", "root fixture read failed")
         user_read = ordinary.raw("read", {"device": args.ordinary_node, "paths": [path]})
         error_text = " ".join(item.get("text", "") for item in user_read.get("content", [])
                               if item.get("type") == "text").lower()
@@ -144,7 +144,7 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", default="./build/roost")
+    parser.add_argument("--binary", default="./build/rmc")
     parser.add_argument("--url", required=True)
     parser.add_argument("--admin-token-file", required=True)
     parser.add_argument("--ordinary-token-file", required=True)

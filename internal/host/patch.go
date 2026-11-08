@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 type PatchInput struct {
@@ -637,7 +637,7 @@ func createPatchTempWithMode(dir string, mode os.FileMode) (*os.File, error) {
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return nil, err
 		}
-		name := nativeJoin(dir, fmt.Sprintf(".roost-patch-%x", nonce))
+		name := nativeJoin(dir, fmt.Sprintf(".rmc-patch-%x", nonce))
 		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, mode)
 		if !errors.Is(err, os.ErrExist) {
 			return f, err

@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 func newTestRuntime(t *testing.T) *Runtime {
@@ -80,7 +80,7 @@ func TestNativeIdentityCwdAndEnvironment(t *testing.T) {
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	in := map[string]any{"cmd": "printf '%s|%s|%s' \"$PWD\" \"$ROOST_TEST_VALUE\" \"$(id -u)\"", "cwd": dir, "env": map[string]string{"ROOST_TEST_VALUE": "你好 world"}, "yield_time_ms": 1000}
+	in := map[string]any{"cmd": "printf '%s|%s|%s' \"$PWD\" \"$RMC_TEST_VALUE\" \"$(id -u)\"", "cwd": dir, "env": map[string]string{"RMC_TEST_VALUE": "你好 world"}, "yield_time_ms": 1000}
 	out, text := untilDone(t, r, "alice", call(t, r, "alice", "exec_command", in))
 	if text != dir+"|你好 world|"+strconv.Itoa(os.Getuid()) {
 		t.Fatalf("unexpected native execution: %q", text)
@@ -500,7 +500,7 @@ func TestSessionInventoryStaysWithinTransportFrame(t *testing.T) {
 }
 
 func TestPatchCreationHonorsUmask(t *testing.T) {
-	const childFlag = "ROOST_TEST_UMASK_CHILD_DIRECTORY"
+	const childFlag = "RMC_TEST_UMASK_CHILD_DIRECTORY"
 	if dir := os.Getenv(childFlag); dir != "" {
 		// This branch runs in a separate test process selected by an exact -test.run.
 		// Changing umask here cannot race with or affect the parent test process.

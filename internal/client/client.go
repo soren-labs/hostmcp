@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/roost/internal/config"
-	"github.com/soren-labs/roost/internal/protocol"
+	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/protocol"
 )
 
 type authTransport struct {
@@ -71,13 +71,13 @@ func (b *boundedBody) Read(p []byte) (int, error) {
 
 func Token(path string) (string, error) {
 	if path == "" {
-		token := strings.TrimSpace(os.Getenv("ROOST_TOKEN"))
+		token := strings.TrimSpace(os.Getenv("RMC_TOKEN"))
 		if token == "" {
 			// Accepted for installations configured before the HostMCP rename.
 			token = strings.TrimSpace(os.Getenv("HOSTMCP_TOKEN"))
 		}
 		if len(token) < 32 || len(token) > 1024 || strings.ContainsAny(token, " \r\n\t") {
-			return "", errors.New("provide --token-file or ROOST_TOKEN")
+			return "", errors.New("provide --token-file or RMC_TOKEN")
 		}
 		return token, nil
 	}
@@ -137,7 +137,7 @@ func Connect(ctx context.Context, raw, token, protocolVersion string, allowInsec
 	if err != nil {
 		return nil, err
 	}
-	c := mcp.NewClient(&mcp.Implementation{Name: "roost-client", Version: protocol.Version}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}})
+	c := mcp.NewClient(&mcp.Implementation{Name: "rmc-client", Version: protocol.Version}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}})
 	return c.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: HTTPClient(endpoint, token), DisableStandaloneSSE: true, MaxRetries: -1, MaxEventSize: protocol.MaxMessageBytes}, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
 }
 
@@ -158,7 +158,7 @@ func bridgeServer(ctx context.Context, session *mcp.ClientSession) (*mcp.Server,
 	if initialized := session.InitializeResult(); initialized != nil {
 		options.Instructions = initialized.Instructions
 	}
-	s := mcp.NewServer(&mcp.Implementation{Name: "roost-connect", Version: protocol.Version}, options)
+	s := mcp.NewServer(&mcp.Implementation{Name: "rmc-connect", Version: protocol.Version}, options)
 	count := 0
 	for tool, err := range session.Tools(ctx, nil) {
 		if err != nil {

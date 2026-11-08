@@ -10,12 +10,12 @@ func TestLegacyServiceNamesKeepTheirLaunchdIdentity(t *testing.T) {
 		name, label, logs string
 		valid             bool
 	}{
-		{"roost-agent", "com.roost.roost-agent", "Roost", true},
+		{"rmc-agent", "com.rmc.rmc-agent", "RMC", true},
 		{"hostmcp-agent-gcp-hub", "com.hostmcp.hostmcp-agent-gcp-hub", "HostMCP", true},
 		{"agent", "", "", false},
-		{"roost-", "", "", true},
+		{"rmc-", "", "", true},
 		{"other-agent", "", "", false},
-		{"roost-../x", "", "", false},
+		{"rmc-../x", "", "", false},
 	}
 	for _, c := range cases {
 		if got := validName(c.name); got != c.valid {
@@ -34,7 +34,7 @@ func TestLegacyServiceNamesKeepTheirLaunchdIdentity(t *testing.T) {
 }
 
 func TestRenderLegacyLaunchdServiceKeepsLabelAndLogs(t *testing.T) {
-	body, err := renderBase("darwin", "hostmcp-agent", "agent", "/usr/local/bin/roost-agent", "/Users/a/.config/hostmcp/agent.json", "/Users/a", "/usr/bin:/bin")
+	body, err := renderBase("darwin", "hostmcp-agent", "agent", "/usr/local/bin/rmc-agent", "/Users/a/.config/hostmcp/agent.json", "/Users/a", "/usr/bin:/bin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +43,11 @@ func TestRenderLegacyLaunchdServiceKeepsLabelAndLogs(t *testing.T) {
 			t.Errorf("legacy plist missing %q:\n%s", want, body)
 		}
 	}
-	body, err = renderBase("darwin", "roost-agent", "agent", "/usr/local/bin/roost-agent", "/Users/a/.config/roost/agent.json", "/Users/a", "/usr/bin:/bin")
+	body, err = renderBase("darwin", "rmc-agent", "agent", "/usr/local/bin/rmc-agent", "/Users/a/.config/rmc/agent.json", "/Users/a", "/usr/bin:/bin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"<string>com.roost.roost-agent</string>", "/Users/a/Library/Logs/Roost/roost-agent.log"} {
+	for _, want := range []string{"<string>com.rmc.rmc-agent</string>", "/Users/a/Library/Logs/RMC/rmc-agent.log"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("plist missing %q:\n%s", want, body)
 		}
@@ -55,7 +55,7 @@ func TestRenderLegacyLaunchdServiceKeepsLabelAndLogs(t *testing.T) {
 }
 
 func TestGeneratedRecognisesBothMarkers(t *testing.T) {
-	if !generated("# Managed by Roost\n") || !generated("<!-- Managed by HostMCP -->") {
+	if !generated("# Managed by RMC\n") || !generated("<!-- Managed by HostMCP -->") {
 		t.Fatal("generated() must accept current and legacy markers")
 	}
 	if generated("[Unit]\nDescription=someone else\n") {

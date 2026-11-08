@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install a released Roost binary into a user-owned directory.
+# Install a released RMC binary into a user-owned directory.
 set -eu
 
 usage() {
@@ -8,18 +8,18 @@ Usage: sh install.sh --version v0.2.1 [--role all|hub|agent] [--prefix DIR] [--r
        sh install.sh --version v0.2.1 --archive PATH --checksums PATH [--prefix DIR]
 
 Downloads the requested GitHub release, verifies SHA-256, and installs the selected
-component (default all: the original roost compatibility binary).
+component (default all: the original rmc compatibility binary).
 Default destination: $HOME/.local/bin. No privilege escalation or service changes.
 The local archive mode also verifies the matching entry in SHA256SUMS.
 EOF
 }
 
-fail() { printf '%s\n' "roost installer: $*" >&2; exit 1; }
+fail() { printf '%s\n' "rmc installer: $*" >&2; exit 1; }
 need_value() { [ "$#" -ge 2 ] && [ -n "$2" ] || fail "missing value for $1"; }
 
 version=''
 prefix="${HOME:?HOME must be set}/.local/bin"
-repository='soren-labs/roost'
+repository='soren-labs/rmc'
 role=all
 local_archive=''
 local_checksums=''
@@ -51,8 +51,8 @@ case "$(uname -m)" in
   *) fail 'supported architectures are amd64 and arm64' ;;
 esac
 case "$role" in
-  all) binary=roost ;;
-  hub|agent) binary="roost-$role" ;;
+  all) binary=rmc ;;
+  hub|agent) binary="rmc-$role" ;;
   *) fail 'role must be all, hub or agent' ;;
 esac
 asset="${binary}_${version}_${target_os}_${target_arch}.tar.gz"
@@ -68,7 +68,7 @@ else
   fail 'sha256sum or shasum is required'
 fi
 
-temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/roost-install.XXXXXX")
+temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/rmc-install.XXXXXX")
 staged_binary=''
 cleanup() {
   [ -z "$staged_binary" ] || rm -f "$staged_binary"
@@ -103,11 +103,11 @@ expected=$(printf '%s' "$expected" | tr 'ABCDEF' 'abcdef')
 
 mkdir "$temp_dir/extract"
 tar -xzf "$temp_dir/$asset" -C "$temp_dir/extract" "$binary"
-[ -f "$temp_dir/extract/$binary" ] && [ ! -L "$temp_dir/extract/$binary" ] || fail 'archive does not contain a regular roost binary'
+[ -f "$temp_dir/extract/$binary" ] && [ ! -L "$temp_dir/extract/$binary" ] || fail 'archive does not contain a regular rmc binary'
 mkdir -p "$prefix"
-staged_binary=$(mktemp "$prefix/.roost.XXXXXX")
+staged_binary=$(mktemp "$prefix/.rmc.XXXXXX")
 cp "$temp_dir/extract/$binary" "$staged_binary"
 chmod 0755 "$staged_binary"
 mv -f "$staged_binary" "$prefix/$binary"
 staged_binary=''
-printf '%s\n' "Installed Roost $version to $prefix/$binary" "Add $prefix to PATH if needed. Services were not started or changed."
+printf '%s\n' "Installed RMC $version to $prefix/$binary" "Add $prefix to PATH if needed. Services were not started or changed."

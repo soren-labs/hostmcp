@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/soren-labs/roost/internal/testutil"
+	"github.com/soren-labs/rmc/internal/testutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,7 +62,7 @@ func updaterFixture(t *testing.T) (Policy, []byte) {
 		t.Fatal(err)
 	}
 	old := testBinary("0.2.1", "agent", 1)
-	binary := filepath.Join(dir, "roost-agent")
+	binary := filepath.Join(dir, "rmc-agent")
 	if err = os.WriteFile(binary, old, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func pin(p *Policy, b []byte) { sum := sha256.Sum256(b); p.SHA256 = hex.EncodeTo
 func TestUpdaterAtomicInstallRollbackAndNoop(t *testing.T) {
 	p, old := updaterFixture(t)
 	next := testBinary("0.2.2", "agent", 1)
-	archive := testArchive(t, next, "roost-agent", tar.TypeReg)
+	archive := testArchive(t, next, "rmc-agent", tar.TypeReg)
 	pin(&p, archive)
 	changed, err := Apply(context.Background(), p, bytes.NewReader(archive))
 	if err != nil || !changed {
@@ -106,14 +106,14 @@ func TestUpdaterFailuresLeaveBinaryUnchanged(t *testing.T) {
 		kind          byte
 		corrupt       bool
 	}{
-		{"checksum", "0.2.2", "agent", 1, "roost-agent", tar.TypeReg, true},
-		{"wrong-version", "0.2.3", "agent", 1, "roost-agent", tar.TypeReg, false},
-		{"wrong-component", "0.2.2", "hub", 1, "roost-agent", tar.TypeReg, false},
-		{"wrong-wire", "0.2.2", "agent", 2, "roost-agent", tar.TypeReg, false},
-		{"traversal", "0.2.2", "agent", 1, "../roost-agent", tar.TypeReg, false},
-		{"absolute", "0.2.2", "agent", 1, "/roost-agent", tar.TypeReg, false},
-		{"symlink", "0.2.2", "agent", 1, "roost-agent", tar.TypeSymlink, false},
-		{"hardlink", "0.2.2", "agent", 1, "roost-agent", tar.TypeLink, false},
+		{"checksum", "0.2.2", "agent", 1, "rmc-agent", tar.TypeReg, true},
+		{"wrong-version", "0.2.3", "agent", 1, "rmc-agent", tar.TypeReg, false},
+		{"wrong-component", "0.2.2", "hub", 1, "rmc-agent", tar.TypeReg, false},
+		{"wrong-wire", "0.2.2", "agent", 2, "rmc-agent", tar.TypeReg, false},
+		{"traversal", "0.2.2", "agent", 1, "../rmc-agent", tar.TypeReg, false},
+		{"absolute", "0.2.2", "agent", 1, "/rmc-agent", tar.TypeReg, false},
+		{"symlink", "0.2.2", "agent", 1, "rmc-agent", tar.TypeSymlink, false},
+		{"hardlink", "0.2.2", "agent", 1, "rmc-agent", tar.TypeLink, false},
 		{"missing-binary", "0.2.2", "agent", 1, "different", tar.TypeReg, false},
 	}
 	for _, tc := range cases {
@@ -140,7 +140,7 @@ func TestUpdaterFailuresLeaveBinaryUnchanged(t *testing.T) {
 }
 func TestUpdaterPolicyLockAndBackupGuards(t *testing.T) {
 	p, old := updaterFixture(t)
-	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "roost-agent", tar.TypeReg)
+	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "rmc-agent", tar.TypeReg)
 	pin(&p, archive)
 	for _, edit := range []func(*Policy){func(p *Policy) { p.Enabled = false }, func(p *Policy) { p.Channel = "latest" }, func(p *Policy) { p.TargetVersion = "0.2.3-rc.1" }, func(p *Policy) { p.TargetVersion = "../../evil" }, func(p *Policy) { p.SHA256 = "" }, func(p *Policy) { p.Binary = "relative" }} {
 		invalid := p
@@ -232,7 +232,7 @@ func TestUpdaterRejectsSymlinkTargetAndLock(t *testing.T) {
 }
 func TestUpdaterFixedSource(t *testing.T) {
 	p := Policy{TargetVersion: "1.2.3"}
-	if got := releaseURL(p); !strings.HasPrefix(got, "https://github.com/soren-labs/roost/releases/download/v1.2.3/roost-agent_1.2.3_") {
+	if got := releaseURL(p); !strings.HasPrefix(got, "https://github.com/soren-labs/rmc/releases/download/v1.2.3/rmc-agent_1.2.3_") {
 		t.Fatal(got)
 	}
 }
@@ -286,7 +286,7 @@ func (r *replacingReader) Read(b []byte) (int, error) {
 }
 func TestUpdaterConcurrentManualReplacementIsPreserved(t *testing.T) {
 	p, _ := updaterFixture(t)
-	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "roost-agent", tar.TypeReg)
+	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "rmc-agent", tar.TypeReg)
 	pin(&p, archive)
 	manual := testBinary("0.2.3", "agent", 1)
 	reader := &replacingReader{reader: bytes.NewReader(archive), replace: func() {

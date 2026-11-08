@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 // Eight long polls from a single principal once blocked all other MCP

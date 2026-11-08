@@ -1,0 +1,17 @@
+# User unit: ~/.config/systemd/user/rmc-hub.service
+# Prefer `rmc service install` to render the actual executable/config paths.
+[Unit]
+Description=RMC Hub
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/rmc hub serve --config %h/.config/rmc/hub.json
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -1,12 +1,12 @@
-# User unit: ~/.config/systemd/user/roost-agent.service
+# User unit: ~/.config/systemd/user/rmc-agent.service
 # Runs as the user's real account, with that account's ordinary OS authority.
 [Unit]
-Description=Roost Device Agent
+Description=RMC Device Agent
 After=network-online.target
 
 [Service]
 Type=exec
-ExecStart=%h/.local/bin/roost agent run --config %h/.config/roost/agent.json
+ExecStart=%h/.local/bin/rmc agent run --config %h/.config/rmc/agent.json
 WorkingDirectory=%h
 Restart=on-failure
 RestartSec=3

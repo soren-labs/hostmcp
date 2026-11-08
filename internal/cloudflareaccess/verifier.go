@@ -20,7 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/soren-labs/roost/internal/config"
+	"github.com/soren-labs/rmc/internal/config"
 )
 
 const (
