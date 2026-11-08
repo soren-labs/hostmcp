@@ -184,8 +184,8 @@ require the appropriate user manager/login and macOS FileVault/TCC state.
 
 ```sh
 go test ./internal/update -count=1
-bash scripts/release.sh v0.2.3 ./build/release-smoke
-python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.2.3
+bash scripts/release.sh v0.3.0 ./build/release-smoke
+python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.3.0
 ```
 
 The packaging test builds a temporary older native Agent, installs each native

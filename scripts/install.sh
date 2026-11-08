@@ -4,8 +4,8 @@ set -eu
 
 usage() {
   cat <<'EOF'
-Usage: sh install.sh --version v0.2.1 [--role all|hub|agent] [--prefix DIR] [--repository OWNER/REPO]
-       sh install.sh --version v0.2.1 --archive PATH --checksums PATH [--prefix DIR]
+Usage: sh install.sh --version v0.3.0 [--role all|hub|agent] [--prefix DIR] [--repository OWNER/REPO]
+       sh install.sh --version v0.3.0 --archive PATH --checksums PATH [--prefix DIR]
 
 Downloads the requested GitHub release, verifies SHA-256, and installs the selected
 component (default all: the original rmc compatibility binary).

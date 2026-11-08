@@ -102,17 +102,19 @@ uses the minimum Go version declared in go.mod to check baseline compatibility.
 The packaging script builds four archives and a SHA256SUMS file without publishing:
 
 ```sh
-bash scripts/release.sh v0.2.3
+bash scripts/release.sh v0.3.0
 ```
 
-Archive names are rmc_VERSION_OS_ARCH.tar.gz for linux/darwin and amd64/arm64.
+Archive names are rmc_VERSION_OS_ARCH.tar.gz, rmc-hub_… and rmc-agent_… for
+linux/darwin and amd64/arm64, plus legacy hostmcp-agent_… archives for v0.2.x
+self-updaters.
 Each contains the binary, LICENSE and dependency license notices. The
 installer verifies the selected archive checksum and writes to a user-owned prefix.
 It can be tested without a network download:
 
 ```sh
-sh scripts/install.sh --version v0.2.3 \
-  --archive dist/rmc_0.2.3_linux_amd64.tar.gz \
+sh scripts/install.sh --version v0.3.0 \
+  --archive dist/rmc_0.3.0_linux_amd64.tar.gz \
   --checksums dist/SHA256SUMS --prefix /tmp/rmc-install-check
 ```
 

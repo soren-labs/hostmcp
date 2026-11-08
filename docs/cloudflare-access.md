@@ -68,7 +68,8 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
 
 ## Production connection procedure
 
-1. Review and build/install the v0.2.3 Hub artifact using the existing release
+1. Review and build/install an RMC Hub (v0.3.0 or later; HostMCP v0.2.3+ also
+   supports this mode) using the existing release
    procedure. Back up the existing Hub config privately before configuring it.
    No Agent upgrade or re-enrollment is required.
 2. In the intended Cloudflare account, review the self-hosted Access application's

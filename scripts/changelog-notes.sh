@@ -1,6 +1,6 @@
 #!/bin/sh
 # Print the CHANGELOG.md section for one release, without its heading.
-# Usage: sh scripts/changelog-notes.sh v0.2.3 [CHANGELOG.md]
+# Usage: sh scripts/changelog-notes.sh v0.3.0 [CHANGELOG.md]
 # Exits non-zero when the version has no "## vX.Y.Z" section or it is empty.
 set -eu
 

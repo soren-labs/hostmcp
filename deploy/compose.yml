@@ -6,7 +6,7 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         # Empty uses the version declared in the checked-out source.
-        VERSION: ${RMC_VERSION:-}
+        VERSION: ${RMC_VERSION:-${HOSTMCP_VERSION:-}}
     image: rmc:local
     command: ["hub", "serve", "--config", "/state/hub.json"]
     ports:

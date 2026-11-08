@@ -1,4 +1,5 @@
-# Set RMC_DOMAIN to the same hostname as the Hub public-url.
+# Set RMC_DOMAIN to the same hostname as the Hub public-url. Deployments from
+# before the HostMCP rename that set HOSTMCP_DOMAIN must also set RMC_DOMAIN.
 # Example: RMC_DOMAIN=mcp.example.com caddy run --config deploy/Caddyfile
 {$RMC_DOMAIN} {
     log {

@@ -5,8 +5,9 @@ Hub↔Agent wire protocol is still version 1, the MCP tools and their arguments
 are unchanged, and configuration file formats are the same. A v0.2.x Agent can
 connect to an RMC Hub and an RMC Agent can connect to a v0.2.x Hub.
 
-Nothing has to change on the day you upgrade. The table shows what was renamed
-and what RMC still accepts from earlier installations.
+Apart from `RMC_DOMAIN` for the Caddy example (below), nothing has to change on
+the day you upgrade. The table shows what was renamed and what RMC still
+accepts from earlier installations.
 
 | Item | HostMCP (≤ v0.2.4) | RMC | Still accepted by RMC |
 | --- | --- | --- | --- |
@@ -46,6 +47,13 @@ includes the `service` command.
 Managed sessions on that node end when its Agent restarts. You can switch the
 service to a `rmc-…` name and move the config to `~/.config/rmc/` later,
 at your own pace.
+
+## Environment variables in deployment files
+
+| File | HostMCP | RMC | What to do |
+| --- | --- | --- | --- |
+| `deploy/Caddyfile` | `HOSTMCP_DOMAIN` | `RMC_DOMAIN` | Set `RMC_DOMAIN` before reloading Caddy with the new file; Caddy has no fallback between variables |
+| `deploy/compose.yml` | `HOSTMCP_VERSION` | `RMC_VERSION` | Optional; `HOSTMCP_VERSION` is still read when `RMC_VERSION` is unset |
 
 ## Docker Compose Hub
 
