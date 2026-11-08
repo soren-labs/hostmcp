@@ -30,12 +30,15 @@ def main():
     goos = {"Darwin": "darwin", "Linux": "linux"}[platform.system()]
     arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "amd64"}[platform.machine()]
     entries = dict(line.split()[::-1] for line in (dist / "SHA256SUMS").read_text().splitlines())
-    assert len(entries) == 12
+    # 12 Roost archives plus 4 legacy hostmcp-agent archives for v0.2.x updaters.
+    assert len(entries) == 16
     for name, checksum in entries.items():
         assert hashlib.sha256((dist / name).read_bytes()).hexdigest() == checksum
         with tarfile.open(dist / name) as archive:
             names = archive.getnames()
             assert "LICENSE" in names and "licenses" in names
+            if name.startswith("hostmcp-agent_"):
+                assert "hostmcp-agent" in names and "roost-agent" not in names
     with tempfile.TemporaryDirectory(prefix="roost-packaging-") as tmp:
         folder = Path(tmp).resolve()
         prefix = folder / "bin"
@@ -82,7 +85,7 @@ def main():
             assert (prefix / "roost-agent.previous").read_bytes() == old
             run(target, "agent", "update", "--policy", policy, "--rollback")
             assert target.read_bytes() == old
-        print("Verified 12 archives, native component roles, offline installs, checksum rejection, and updater safeguards.")
+        print("Verified 16 archives (including legacy hostmcp-agent), native component roles, offline installs, checksum rejection, and updater safeguards.")
 
 
 if __name__ == "__main__":
