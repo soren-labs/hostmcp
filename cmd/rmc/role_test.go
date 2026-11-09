@@ -68,16 +68,35 @@ func TestOAuthCLIConfigurePreservesLegacyConfiguration(t *testing.T) {
 }
 
 func TestComponentUsageOnlyShowsSupportedCommands(t *testing.T) {
-	for _, role := range []string{"hub", "agent"} {
+	for _, role := range []string{"hub", "node"} {
 		text := roleUsage(role)
 		if strings.Contains(text, "rmc stdio") || strings.Contains(text, "rmc-"+role+" stdio") {
 			t.Fatal("unsupported stdio in component usage")
 		}
-		if role == "agent" && strings.Contains(text, "rmc-agent hub") {
-			t.Fatal("Hub command shown for Agent")
+		if role == "node" && strings.Contains(text, "rmc-node hub") {
+			t.Fatal("Hub command shown for node")
 		}
 		if !strings.Contains(text, "rmc-"+role+" version") {
 			t.Fatal("missing component usage")
 		}
+	}
+}
+
+func TestAgentRoleIsAnAliasForNode(t *testing.T) {
+	if roleUsage("agent") != roleUsage("node") {
+		t.Fatal("agent build usage differs from node build usage")
+	}
+	for _, tc := range []struct {
+		role, command string
+		ok            bool
+	}{
+		{"node", "node", true}, {"node", "agent", true}, {"agent", "node", true}, {"node", "hub", false}, {"hub", "node", false},
+	} {
+		if err := checkRole(tc.role, tc.command); (err == nil) != tc.ok {
+			t.Fatalf("checkRole(%q, %q) = %v", tc.role, tc.command, err)
+		}
+	}
+	if !strings.Contains(roleUsage("node"), "rmc-node node run") {
+		t.Fatal("node usage missing node run")
 	}
 }

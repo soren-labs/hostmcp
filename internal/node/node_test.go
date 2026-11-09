@@ -1,4 +1,4 @@
-package agent
+package node
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func TestReviewAuthorizationRejectionBacksOffWithoutRestartLoop(t *testing.T) {
 			defer srv.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
 			defer cancel()
-			err := Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: "0123456789012345678901234567890123456789012"}, &counterExecutor{}, protocol.Device{})
+			err := Run(ctx, config.Node{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: "0123456789012345678901234567890123456789012"}, &counterExecutor{}, protocol.Device{})
 			if err != nil || attempts.Load() != 1 {
 				t.Fatalf("authorization retry loop: attempts=%d err=%v", attempts.Load(), err)
 			}
@@ -98,7 +98,7 @@ func TestDuplicateWireRequestDoesNotExecuteTwice(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}, exec, protocol.Device{})
+		done <- Run(ctx, config.Node{Version: 1, HubURL: srv.URL, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}, exec, protocol.Device{})
 	}()
 	select {
 	case err := <-result:
@@ -121,7 +121,7 @@ func TestDuplicateWireRequestDoesNotExecuteTwice(t *testing.T) {
 
 func TestAgentRejectsCredentialLeakingURLs(t *testing.T) {
 	for _, raw := range []string{"http://remote.example", "https://owner:secret@example.com", "https://example.com?token=secret", "https://example.com/mcp", "file:///etc/passwd"} {
-		if _, err := endpointURL(config.Agent{Version: 1, HubURL: raw, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}); err == nil {
+		if _, err := endpointURL(config.Node{Version: 1, HubURL: raw, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}); err == nil {
 			t.Errorf("accepted %s", raw)
 		}
 	}
@@ -230,7 +230,7 @@ func TestDisconnectCancelsAbandonedCallAndReconnectsWithoutReplay(t *testing.T) 
 	defer srv.Close()
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}, executor, protocol.Device{})
+		done <- Run(ctx, config.Node{Version: 1, HubURL: srv.URL, DeviceID: "test", Token: "0123456789012345678901234567890123456789012"}, executor, protocol.Device{})
 	}()
 	defer func() {
 		cancel()
@@ -263,7 +263,7 @@ func TestAccountMismatchFailsBeforeConnecting(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer srv.Close()
-	cfg := config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "workstation-root", Token: "0123456789012345678901234567890123456789012", ExpectedUser: "root"}
+	cfg := config.Node{Version: 1, HubURL: srv.URL, DeviceID: "workstation-root", Token: "0123456789012345678901234567890123456789012", ExpectedUser: "root"}
 	err := Run(context.Background(), cfg, &counterExecutor{}, protocol.Device{Username: "dev", UID: "1000", EUID: "1000"})
 	if err == nil || connections.Load() != 0 {
 		t.Fatalf("mismatched account connected: connections=%d error=%v", connections.Load(), err)

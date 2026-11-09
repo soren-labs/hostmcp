@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/rmc/internal/agent"
 	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/node"
 	"github.com/soren-labs/rmc/internal/protocol"
 )
 
@@ -67,7 +67,7 @@ func BenchmarkToolCallHTTP(b *testing.B) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = agent.Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: deviceToken}, &recordingExecutor{}, protocol.Device{ID: "dev1", Hostname: "bench", OS: "test", Username: "bench"})
+		_ = node.Run(ctx, config.Node{Version: 1, HubURL: srv.URL, DeviceID: "dev1", Token: deviceToken}, &recordingExecutor{}, protocol.Device{ID: "dev1", Hostname: "bench", OS: "test", Username: "bench"})
 	}()
 	b.Cleanup(func() { cancel(); <-done })
 	for deadline := time.Now().Add(5 * time.Second); ; {

@@ -30,19 +30,17 @@ def main():
     goos = {"Darwin": "darwin", "Linux": "linux"}[platform.system()]
     arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "amd64"}[platform.machine()]
     entries = dict(line.split()[::-1] for line in (dist / "SHA256SUMS").read_text().splitlines())
-    # 12 RMC archives plus 4 legacy hostmcp-agent archives for v0.2.x updaters.
-    assert len(entries) == 16
+    # rmc, rmc-hub and rmc-node for four targets.
+    assert len(entries) == 12
     for name, checksum in entries.items():
         assert hashlib.sha256((dist / name).read_bytes()).hexdigest() == checksum
         with tarfile.open(dist / name) as archive:
             names = archive.getnames()
             assert "LICENSE" in names and "licenses" in names
-            if name.startswith("hostmcp-agent_"):
-                assert "hostmcp-agent" in names and "rmc-agent" not in names
     with tempfile.TemporaryDirectory(prefix="rmc-packaging-") as tmp:
         folder = Path(tmp).resolve()
         prefix = folder / "bin"
-        for role in ("all", "hub", "agent"):
+        for role in ("all", "hub", "node"):
             binary = "rmc" if role == "all" else f"rmc-{role}"
             asset = dist / f"{binary}_{version}_{goos}_{arch}.tar.gz"
             run("sh", "scripts/install.sh", "--role", role, "--version", version,
@@ -51,21 +49,21 @@ def main():
             assert identity["component"] == role and identity["version"] == version
             assert identity["wire_version"] == 1
             if role == "hub":
-                run(prefix / binary, "agent", "run", ok=False)
+                run(prefix / binary, "node", "run", ok=False)
                 run(prefix / binary, "stdio", ok=False)
-            if role == "agent":
+            if role == "node":
                 run(prefix / binary, "hub", "serve", ok=False)
                 run(prefix / binary, "stdio", ok=False)
         bad = folder / "bad.tar.gz"
         bad.write_bytes(asset.read_bytes() + b"corrupted")
-        original = (prefix / "rmc-agent").read_bytes()
-        run("sh", "scripts/install.sh", "--role", "agent", "--version", version,
+        original = (prefix / "rmc-node").read_bytes()
+        run("sh", "scripts/install.sh", "--role", "node", "--version", version,
             "--archive", bad, "--checksums", dist / "SHA256SUMS", "--prefix", prefix, ok=False)
-        assert original == (prefix / "rmc-agent").read_bytes()
-        # Build an older native agent as the target; no service is installed or started.
-        target = prefix / "rmc-agent"
+        assert original == (prefix / "rmc-node").read_bytes()
+        # Build an older native node as the target; no service is installed or started.
+        target = prefix / "rmc-node"
         run("go", "build", "-trimpath", "-ldflags",
-            "-X main.component=agent -X main.version=0.0.0 -X github.com/soren-labs/rmc/internal/protocol.Version=0.0.0",
+            "-X main.component=node -X main.version=0.0.0 -X github.com/soren-labs/rmc/internal/protocol.Version=0.0.0",
             "-o", target, "./cmd/rmc")
         old = target.read_bytes()
         policy = folder / "update.json"
@@ -74,18 +72,18 @@ def main():
                                      "binary": str(target)}))
         policy.chmod(0o600)
         if os.geteuid() == 0:
-            run(target, "agent", "update", "--policy", policy, "--archive", asset, ok=False)
+            run(target, "node", "update", "--policy", policy, "--archive", asset, ok=False)
             assert target.read_bytes() == old
             print("Root replacement refusal verified; non-root updater smoke requires a user account.")
         else:
-            run(target, "agent", "update", "--policy", policy, "--archive", bad, ok=False)
+            run(target, "node", "update", "--policy", policy, "--archive", bad, ok=False)
             assert target.read_bytes() == old
-            run(target, "agent", "update", "--policy", policy, "--archive", asset)
+            run(target, "node", "update", "--policy", policy, "--archive", asset)
             assert json.loads(run(target, "version").stdout)["version"] == version
-            assert (prefix / "rmc-agent.previous").read_bytes() == old
-            run(target, "agent", "update", "--policy", policy, "--rollback")
+            assert (prefix / "rmc-node.previous").read_bytes() == old
+            run(target, "node", "update", "--policy", policy, "--rollback")
             assert target.read_bytes() == old
-        print("Verified 16 archives (including legacy hostmcp-agent), native component roles, offline installs, checksum rejection, and updater safeguards.")
+        print("Verified 12 archives, native component roles, offline installs, checksum rejection, and updater safeguards.")
 
 
 if __name__ == "__main__":

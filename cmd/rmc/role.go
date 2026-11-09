@@ -5,8 +5,17 @@ import (
 	"strings"
 )
 
+// normalizeRole maps the pre-v0.3 "agent" component name to "node".
+func normalizeRole(role string) string {
+	if role == "agent" {
+		return "node"
+	}
+	return role
+}
+
 func checkRole(role, command string) error {
-	if role != "all" && role != "hub" && role != "agent" {
+	role = normalizeRole(role)
+	if role != "all" && role != "hub" && role != "node" {
 		return fmt.Errorf("invalid build component %q", role)
 	}
 	if role == "all" {
@@ -19,8 +28,8 @@ func checkRole(role, command string) error {
 		if role == "hub" {
 			return nil
 		}
-	case "agent":
-		if role == "agent" {
+	case "node", "agent":
+		if role == "node" {
 			return nil
 		}
 	}
@@ -28,6 +37,7 @@ func checkRole(role, command string) error {
 }
 
 func roleUsage(role string) string {
+	role = normalizeRole(role)
 	if role == "all" {
 		return usage
 	}

@@ -1,4 +1,4 @@
-// Package update performs operator-pinned, agent-only binary updates. There is
+// Package update performs operator-pinned, node-only binary updates. There is
 // deliberately no Hub update message or URL supplied by an MCP client.
 package update
 
@@ -92,7 +92,7 @@ func Load(file string) (Policy, error) {
 	return p, err
 }
 func Asset(version string) string {
-	return fmt.Sprintf("rmc-agent_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("rmc-node_%s_%s_%s.tar.gz", version, runtime.GOOS, runtime.GOARCH)
 }
 func releaseURL(p Policy) string {
 	return releaseSource + "v" + p.TargetVersion + "/" + Asset(p.TargetVersion)
@@ -160,7 +160,7 @@ func lock(p Policy) (*os.File, error) {
 		return nil, err
 	}
 	if os.Geteuid() == 0 {
-		return nil, errors.New("root agent updates are manual; updater refuses to run as root")
+		return nil, errors.New("root node updates are manual; updater refuses to run as root")
 	}
 	if err := safeParents(p.Binary); err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func probe(ctx context.Context, file string) (Identity, error) {
 	if err := json.Unmarshal(out.data, &id); err != nil {
 		return id, errors.New("candidate returned invalid version identity")
 	}
-	if id.Component != "agent" || id.WireVersion != protocol.WireVersion || id.OS != runtime.GOOS || id.Arch != runtime.GOARCH {
+	if id.Component != "node" || id.WireVersion != protocol.WireVersion || id.OS != runtime.GOOS || id.Arch != runtime.GOARCH {
 		return id, errors.New("candidate component, platform or wire version mismatch")
 	}
 	return id, nil
@@ -247,11 +247,11 @@ func extract(archive *os.File, out *os.File) error {
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
 			return errors.New("archive links and special files are refused")
 		}
-		if name != "rmc-agent" {
+		if name != "rmc-node" {
 			continue
 		}
 		if found || header.Typeflag != tar.TypeReg {
-			return errors.New("archive must contain exactly one regular rmc-agent")
+			return errors.New("archive must contain exactly one regular rmc-node")
 		}
 		found = true
 		if _, err = io.Copy(out, reader); err != nil {
@@ -267,7 +267,7 @@ func extract(archive *os.File, out *os.File) error {
 		return errors.New("archive trailing data exceeds limit")
 	}
 	if !found {
-		return errors.New("agent executable is absent")
+		return errors.New("node executable is absent")
 	}
 	return nil
 }
@@ -305,7 +305,7 @@ func Apply(ctx context.Context, p Policy, archive io.Reader) (bool, error) {
 	}
 	current, err := probe(ctx, p.Binary)
 	if err != nil {
-		return false, fmt.Errorf("installed agent: %w", err)
+		return false, fmt.Errorf("installed node: %w", err)
 	}
 	old, _ := versionParts(current.Version)
 	target, _ := versionParts(p.TargetVersion)
@@ -338,7 +338,7 @@ func Apply(ctx context.Context, p Policy, archive io.Reader) (bool, error) {
 	if n > maxArchive || !strings.EqualFold(hex.EncodeToString(digest.Sum(nil)), p.SHA256) {
 		return false, errors.New("archive SHA-256 mismatch or size exceeded; binary unchanged")
 	}
-	staged, err := os.CreateTemp(dir, ".rmc-agent-*")
+	staged, err := os.CreateTemp(dir, ".rmc-node-*")
 	if err != nil {
 		return false, err
 	}
@@ -371,7 +371,7 @@ func Apply(ctx context.Context, p Policy, archive io.Reader) (bool, error) {
 		return false, err
 	}
 	if !os.SameFile(original, latest) || original.Size() != latest.Size() || !original.ModTime().Equal(latest.ModTime()) {
-		return false, errors.New("installed agent changed during staging; replacement refused")
+		return false, errors.New("installed node changed during staging; replacement refused")
 	}
 	// An existing backup blocks further replacement, so rollback is never overwritten.
 	backup := p.Binary + ".previous"

@@ -50,9 +50,18 @@ func xmlText(s string) string {
 	return b.String()
 }
 
-func Render(goos, name, role, binary, configPath, home, path string) (string, error) {
-	content, err := renderBase(goos, name, role, binary, configPath, home, path)
+// NormalizeRole maps the pre-v0.3 "agent" role to "node".
+func NormalizeRole(role string) string {
 	if role == "agent" {
+		return "node"
+	}
+	return role
+}
+
+func Render(goos, name, role, binary, configPath, home, path string) (string, error) {
+	role = NormalizeRole(role)
+	content, err := renderBase(goos, name, role, binary, configPath, home, path)
+	if role == "node" {
 		content = strings.ReplaceAll(content, "UMask=0077\n", "")
 	}
 	return content, err
@@ -62,8 +71,9 @@ func renderBase(goos, name, role, binary, configPath, home, path string) (string
 	if !validName(name) {
 		return "", errors.New("service name must start with rmc- (or a legacy hostmcp- name) and use letters, digits, dots, underscores or hyphens")
 	}
-	if role != "agent" && role != "hub" {
-		return "", errors.New("role must be hub or agent")
+	role = NormalizeRole(role)
+	if role != "node" && role != "hub" {
+		return "", errors.New("role must be hub or node")
 	}
 	for _, value := range []string{binary, configPath, home, path} {
 		if strings.ContainsAny(value, "\r\n\x00") {
@@ -78,7 +88,7 @@ func renderBase(goos, name, role, binary, configPath, home, path string) (string
 		if !filepath.IsAbs(home) {
 			return "", errors.New("service working directory must be an absolute path")
 		}
-		// The agent intentionally has no filesystem/privilege sandbox: it acts as
+		// The node intentionally has no filesystem/privilege sandbox: it acts as
 		// this user's normal account. Only the optional Hub container is isolated.
 		return fmt.Sprintf("# %s\n[Unit]\nDescription=RMC %s\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=exec\nExecStart=%s %s %s --config %s\nWorkingDirectory=%s\nEnvironment=%s\nEnvironment=%s\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=mixed\nUMask=0077\n\n[Install]\nWantedBy=default.target\n", marker, role, unitExecQuote(binary), role, action, unitExecQuote(configPath), unitDirectory(home), unitQuote("HOME="+home), unitQuote("PATH="+path)), nil
 	}
@@ -167,7 +177,7 @@ func startSystemdScoped(name string, system bool, run commandRun, query commandQ
 	}
 	// Type=exec waits for chdir/exec failures. Give immediate configuration or bind
 	// failures a chance to settle before checking the actual manager state too.
-	// A fast 150 ms check can race an agent's first authentication failure.
+	// A fast 150 ms check can race a node's first authentication failure.
 	// This is an initial liveness probe, not a promise of indefinite uptime.
 	time.Sleep(time.Second)
 	out, err := query("systemctl", systemdArgs(system, "show", "--no-pager", "--property=LoadState,ActiveState,SubState,Result", name+".service")...)
@@ -222,6 +232,7 @@ func stopLaunchd(target string, run commandRun, query commandQuery) error {
 }
 
 func Install(name, role, configPath string) error {
+	role = NormalizeRole(role)
 	if name == "" {
 		name = "rmc-" + role
 	}
@@ -233,19 +244,19 @@ func Install(name, role, configPath string) error {
 		if _, err = config.NewStore(abs).Snapshot(); err != nil {
 			return err
 		}
-	} else if role == "agent" {
-		var a config.Agent
+	} else if role == "node" {
+		var a config.Node
 		if err = config.ReadJSON(abs, &a); err != nil {
 			return err
 		}
 		if a.Version != 1 || !config.ValidID(a.DeviceID) || len(a.Token) < 32 {
-			return errors.New("invalid agent configuration")
+			return errors.New("invalid node configuration")
 		}
 		if _, err = config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
 		}
 	} else {
-		return errors.New("role must be hub or agent")
+		return errors.New("role must be hub or node")
 	}
 	binary, err := os.Executable()
 	if err != nil {

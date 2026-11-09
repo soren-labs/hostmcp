@@ -1,12 +1,12 @@
-# User unit: ~/.config/systemd/user/rmc-agent.service
+# User unit: ~/.config/systemd/user/rmc-node.service
 # Runs as the user's real account, with that account's ordinary OS authority.
 [Unit]
-Description=RMC Device Agent
+Description=RMC node
 After=network-online.target
 
 [Service]
 Type=exec
-ExecStart=%h/.local/bin/rmc agent run --config %h/.config/rmc/agent.json
+ExecStart=%h/.local/bin/rmc node run --config %h/.config/rmc/node.json
 WorkingDirectory=%h
 Restart=on-failure
 RestartSec=3

@@ -67,7 +67,8 @@ type Invitation struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
-type Agent struct {
+// Node is a node's private configuration (agent.json/node.json).
+type Node struct {
 	ExpectedUser  string `json:"expected_user,omitempty"`
 	Version       int    `json:"version"`
 	HubURL        string `json:"hub_url"`
@@ -502,8 +503,8 @@ func (h Hub) DeviceValidForUser(id, hash, username string) bool {
 	return false
 }
 
-func (s *Store) Redeem(id, token string) (Agent, error) {
-	var result Agent
+func (s *Store) Redeem(id, token string) (Node, error) {
+	var result Node
 	err := s.Update(func(h *Hub) error {
 		index := -1
 		for n, i := range h.Invitations {
@@ -527,7 +528,7 @@ func (s *Store) Redeem(id, token string) (Agent, error) {
 		expectedUser := h.Invitations[index].ExpectedUser
 		h.Devices = append(h.Devices, Device{ID: id, TokenHash: Hash(secret), ExpectedUser: expectedUser})
 		h.Invitations = append(h.Invitations[:index], h.Invitations[index+1:]...)
-		result = Agent{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, ExpectedUser: expectedUser, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://")}
+		result = Node{Version: FormatVersion, HubURL: h.PublicURL, DeviceID: id, Token: secret, ExpectedUser: expectedUser, AllowInsecure: strings.HasPrefix(h.PublicURL, "http://")}
 		return nil
 	})
 	return result, err

@@ -1,4 +1,4 @@
-package agent
+package node
 
 import (
 	"context"
@@ -58,7 +58,7 @@ func TestCompatibilityNewAgentWithLegacyHub(t *testing.T) {
 	defer func() { http.DefaultTransport = previous }()
 	finished := make(chan error, 1)
 	go func() {
-		finished <- Run(ctx, config.Agent{Version: 1, HubURL: memory.URL, DeviceID: "node", Token: "0123456789012345678901234567890123456789"}, &counterExecutor{}, protocol.Device{})
+		finished <- Run(ctx, config.Node{Version: 1, HubURL: memory.URL, DeviceID: "node", Token: "0123456789012345678901234567890123456789"}, &counterExecutor{}, protocol.Device{})
 	}()
 	select {
 	case err := <-result:

@@ -11,7 +11,7 @@ import (
 )
 
 func updateCommand(ctx context.Context, args []string) error {
-	f := flags("agent update")
+	f := flags("node update")
 	policyFile := f.String("policy", "", "private, locally provisioned update policy JSON")
 	archiveFile := f.String("archive", "", "offline release archive; must match policy checksum")
 	rollback := f.Bool("rollback", false, "restore the locally retained previous binary")
@@ -32,7 +32,7 @@ func updateCommand(ctx context.Context, args []string) error {
 		if err = update.Rollback(ctx, p); err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "Restored previous agent binary; restart the existing agent service and verify list_devices.")
+		fmt.Fprintln(os.Stderr, "Restored previous node binary; restart the existing node service and verify list_devices.")
 		return nil
 	}
 	current, err := update.Inspect(ctx, p)
@@ -40,7 +40,7 @@ func updateCommand(ctx context.Context, args []string) error {
 		return err
 	}
 	if current.Version == p.TargetVersion {
-		fmt.Fprintln(os.Stderr, "Agent is already at the pinned version.")
+		fmt.Fprintln(os.Stderr, "Node is already at the pinned version.")
 		return nil
 	}
 	var archive io.ReadCloser
@@ -55,13 +55,13 @@ func updateCommand(ctx context.Context, args []string) error {
 	defer archive.Close()
 	changed, err := update.Apply(ctx, p, archive)
 	if changed {
-		fmt.Fprintln(os.Stderr, "Agent binary replaced; previous binary retained. Restart the existing agent service and verify list_devices; managed sessions end on restart.")
+		fmt.Fprintln(os.Stderr, "Node binary replaced; previous binary retained. Restart the existing node service and verify list_devices; managed sessions end on restart.")
 	}
 	if err != nil {
 		return err
 	}
 	if !changed {
-		fmt.Fprintln(os.Stderr, "Agent is already at the pinned version.")
+		fmt.Fprintln(os.Stderr, "Node is already at the pinned version.")
 	}
 	return nil
 }

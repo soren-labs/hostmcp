@@ -21,12 +21,12 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/rmc/internal/agent"
 	"github.com/soren-labs/rmc/internal/client"
 	"github.com/soren-labs/rmc/internal/config"
 	"github.com/soren-labs/rmc/internal/host"
 	"github.com/soren-labs/rmc/internal/hub"
 	"github.com/soren-labs/rmc/internal/mcpserver"
+	"github.com/soren-labs/rmc/internal/node"
 	"github.com/soren-labs/rmc/internal/protocol"
 	"github.com/soren-labs/rmc/internal/service"
 )
@@ -45,9 +45,9 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
   rmc device invite --id NAME --output INVITE.json|- [--user OS_USER] [--config HUB.json]
   rmc device revoke --id NAME [--config HUB.json]
   rmc device list [--config HUB.json]
-  rmc agent enroll --invite INVITE.json|- [--config AGENT.json]
-  rmc agent run [--config AGENT.json] [--log-format text|json]
-  rmc agent update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
+  rmc node enroll --invite INVITE.json|- [--config NODE.json]
+  rmc node run [--config NODE.json] [--log-format text|json]
+  rmc node update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
   rmc token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
   rmc token list [--config HUB.json]
   rmc token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
@@ -55,7 +55,7 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
   rmc token revoke --id NAME [--config HUB.json]
   rmc connect --url https://host.example/mcp --token-file TOKEN
   rmc call --url URL --token-file TOKEN --tool list_devices --args '{}'
-  rmc service install --role hub|agent --config FILE [--name rmc-NAME] [--system --user OS_USER]
+  rmc service install --role hub|node --config FILE [--name rmc-NAME] [--system --user OS_USER]
   rmc service uninstall --name rmc-NAME [--system]
   rmc doctor [--hub-config HUB.json] [--hub-url URL]
   rmc version
@@ -63,6 +63,7 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
 Run a subcommand with --help for flags. Secrets are written to private files.
 MCP HTTP requires a client credential or a configured, verified Access assertion.
 Native devices use separate credentials and outbound connections.
+Nodes were called agents before v0.3; "rmc agent ..." still works.
 `
 
 func defaultFile(name string) string {
@@ -146,8 +147,8 @@ func run(ctx context.Context, args []string) error {
 		return deviceCommand(args[1:])
 	case "token":
 		return tokenCommand(args[1:])
-	case "agent":
-		return agentCommand(ctx, args[1:])
+	case "node", "agent":
+		return nodeCommand(ctx, args[1:])
 	case "connect", "call":
 		return clientCommand(ctx, args[0], args[1:])
 	case "service":
@@ -350,7 +351,7 @@ func deviceCommand(args []string) error {
 	path := f.String("config", defaultFile("hub.json"), "hub configuration path")
 	id := f.String("id", "", "device ID")
 	expectedUser := f.String("user", "", "bind this node to an expected OS username (optional)")
-	output := f.String("output", "", "private invitation JSON output file, or - for stdout to pipe into agent enroll --invite -")
+	output := f.String("output", "", "private invitation JSON output file, or - for stdout to pipe into node enroll --invite -")
 	ttl := f.Duration("ttl", 15*time.Minute, "invitation lifetime (maximum 24h)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
@@ -361,7 +362,7 @@ func deviceCommand(args []string) error {
 		toStdout := *output == "-"
 		if toStdout {
 			if isTerminal(os.Stdout) {
-				return errors.New("refusing to print a single-use device credential to a terminal; pipe it (rmc device invite ... --output - | ssh HOST rmc agent enroll --invite -) or use --output FILE")
+				return errors.New("refusing to print a single-use device credential to a terminal; pipe it (rmc device invite ... --output - | ssh HOST rmc node enroll --invite -) or use --output FILE")
 			}
 		} else if err := absent(*output); err != nil {
 			return err
@@ -556,17 +557,30 @@ func tokenCommand(args []string) error {
 	}
 }
 
-func agentCommand(ctx context.Context, args []string) error {
+// nodeConfigFile is node.json, or an existing pre-v0.3 agent.json.
+func nodeConfigFile() string {
+	current := defaultFile("node.json")
+	if _, err := os.Lstat(current); os.IsNotExist(err) {
+		if legacy := defaultFile("agent.json"); legacy != "" {
+			if _, err := os.Lstat(legacy); err == nil {
+				return legacy
+			}
+		}
+	}
+	return current
+}
+
+func nodeCommand(ctx context.Context, args []string) error {
 	if len(args) > 0 && args[0] == "update" {
 		return updateCommand(ctx, args[1:])
 	}
 	if len(args) == 0 {
-		return errors.New("use agent enroll, agent run or agent update")
+		return errors.New("use node enroll, node run or node update")
 	}
-	f := flags("agent " + args[0])
-	path := f.String("config", defaultFile("agent.json"), "device agent configuration path")
+	f := flags("node " + args[0])
+	path := f.String("config", nodeConfigFile(), "node configuration path")
 	invitePath := f.String("invite", "", "single-use invitation JSON file, or - to read it from stdin")
-	logFormat := f.String("log-format", "text", "agent run log output: text or json (one object per line)")
+	logFormat := f.String("log-format", "text", "node run log output: text or json (one object per line)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
@@ -610,7 +624,7 @@ func agentCommand(ctx context.Context, args []string) error {
 			}
 			return fmt.Errorf("enrollment rejected (HTTP %d); check invitation, expiry and hub URL", resp.StatusCode)
 		}
-		var a config.Agent
+		var a config.Node
 		if err = json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&a); err != nil {
 			return err
 		}
@@ -626,12 +640,12 @@ func agentCommand(ctx context.Context, args []string) error {
 		if err := setLogFormat(*logFormat); err != nil {
 			return err
 		}
-		var a config.Agent
+		var a config.Node
 		if err := config.ReadJSON(*path, &a); err != nil {
 			return err
 		}
 		if a.Version != 1 {
-			return errors.New("unsupported agent configuration version")
+			return errors.New("unsupported node configuration version")
 		}
 		if _, err := config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
@@ -641,9 +655,9 @@ func agentCommand(ctx context.Context, args []string) error {
 			return err
 		}
 		defer rt.Close()
-		return agent.Run(ctx, a, rt, rt.Info(a.DeviceID))
+		return node.Run(ctx, a, rt, rt.Info(a.DeviceID))
 	default:
-		return errors.New("use agent enroll, agent run or agent update")
+		return errors.New("use node enroll, node run or node update")
 	}
 }
 
@@ -703,7 +717,7 @@ func serviceCommand(args []string) error {
 		return errors.New("use service install or service uninstall")
 	}
 	f := flags("service " + args[0])
-	role := f.String("role", "", "hub or agent")
+	role := f.String("role", "", "hub or node")
 	path := f.String("config", "", "absolute configuration path")
 	name := f.String("name", "", "service name starting with rmc- (or an existing hostmcp- name)")
 	system := f.Bool("system", false, "install or remove a system service (requires root)")
