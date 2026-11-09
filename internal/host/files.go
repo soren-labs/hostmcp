@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image"
@@ -38,6 +39,9 @@ type WriteInput struct {
 	Overwrite     bool   `json:"overwrite,omitempty"`
 	CreateParents bool   `json:"create_parents,omitempty"`
 	Mode          string `json:"mode,omitempty"`
+	// ExpectedSHA256 makes an overwrite conditional on the file's current
+	// content, so stale context cannot clobber a newer edit.
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
 }
 type ImageInput struct {
 	Path string `json:"path"`
@@ -97,6 +101,39 @@ func openDirectory(path string) (*os.File, error) {
 		return nil, fmt.Errorf("%s changed to a non-directory while opening", path)
 	}
 	return f, nil
+}
+
+// hashLimit bounds the bytes hashed for read's sha256 and for verifying
+// write_file's expected_sha256. It matches read's text scan limit.
+const hashLimit = 16 << 20
+
+// fileSHA256 hashes an open file from its start. ok is false when the file is
+// larger than hashLimit.
+func fileSHA256(f *os.File) (sum string, ok bool, err error) {
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
+		return "", false, err
+	}
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, hashLimit+1))
+	if err != nil {
+		return "", false, err
+	}
+	if n > hashLimit {
+		return "", false, nil
+	}
+	return hex.EncodeToString(h.Sum(nil)), true, nil
+}
+
+// withSHA256 adds the whole file's sha256 to a read entry when it is small
+// enough to hash. The hash comes from the same descriptor as the content.
+func withSHA256(entry map[string]any, f *os.File, size int64) map[string]any {
+	if size > hashLimit {
+		return entry
+	}
+	if sum, ok, err := fileSHA256(f); err == nil && ok {
+		entry["sha256"] = sum
+	}
+	return entry
 }
 
 func (r *Runtime) read(in ReadInput) (protocol.Result, error) {
@@ -210,7 +247,7 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 		entry["encoding"] = "base64"
 		entry["content"] = base64.StdEncoding.EncodeToString(b)
 		entry["truncated"] = truncated
-		return entry, len(b), nil
+		return withSHA256(entry, f, info.Size()), len(b), nil
 	}
 	// ReadSlice bounds memory even if a malicious/generated file has a gigantic line.
 	const scanLimit = 16 << 20
@@ -267,7 +304,7 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 		entry["binary"] = true
 		entry["note"] = "NUL bytes detected; use encoding=base64 for binary content"
 		entry["truncated"] = false
-		return entry, 0, nil
+		return withSHA256(entry, f, info.Size()), 0, nil
 	}
 	data := result.Bytes()
 	if truncated {
@@ -280,7 +317,7 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 	entry["truncated"] = truncated
 	entry["scanned_bytes"] = scanned
 	entry["invalid_utf8_replaced"] = !utf8.Valid(data)
-	return entry, len(data), nil
+	return withSHA256(entry, f, info.Size()), len(data), nil
 }
 
 func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {
@@ -316,6 +353,9 @@ func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {
 			return protocol.Result{}, err
 		}
 	}
+	if in.ExpectedSHA256 != "" {
+		return replaceVerified(path, content, in.ExpectedSHA256, in.Overwrite)
+	}
 	flag := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if in.Overwrite {
 		flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
@@ -333,6 +373,51 @@ func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {
 		return protocol.Result{}, fmt.Errorf("close %s after writing %d bytes: %w", path, n, closeErr)
 	}
 	return protocol.JSONResult(map[string]any{"path": path, "written_bytes": n, "sha256": fmt.Sprintf("%x", sha256.Sum256(content))}), nil
+}
+
+// replaceVerified replaces an existing file only if its current content has
+// the expected sha256. Verification and the write use one descriptor, and
+// write_file already holds the device's file lock; a process outside RMC
+// writing between the check and the write can still interleave.
+func replaceVerified(path string, content []byte, expected string, overwrite bool) (protocol.Result, error) {
+	want := strings.ToLower(expected)
+	if len(want) != 64 || strings.Trim(want, "0123456789abcdef") != "" {
+		return protocol.Result{}, errors.New("expected_sha256 must be 64 hexadecimal characters")
+	}
+	if !overwrite {
+		return protocol.Result{}, errors.New("expected_sha256 replaces an existing file and requires overwrite=true")
+	}
+	f, err := openRegular(path, os.O_RDWR, 0)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return protocol.Result{}, fmt.Errorf("%s does not exist; expected_sha256 only guards replacing an existing file", path)
+		}
+		return protocol.Result{}, err
+	}
+	current, ok, err := fileSHA256(f)
+	if err == nil && !ok {
+		err = fmt.Errorf("%s is larger than %d bytes; expected_sha256 cannot be verified", path, hashLimit)
+	}
+	if err == nil && current != want {
+		err = fmt.Errorf("%s has changed: its sha256 is %s, not the expected %s. Nothing was written; read the file again before replacing it", path, current, want)
+	}
+	if err != nil {
+		f.Close()
+		return protocol.Result{}, err
+	}
+	if err = f.Truncate(0); err != nil {
+		f.Close()
+		return protocol.Result{}, err
+	}
+	n, writeErr := f.WriteAt(content, 0)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return protocol.Result{}, fmt.Errorf("write %s failed after %d bytes: %w", path, n, writeErr)
+	}
+	if closeErr != nil {
+		return protocol.Result{}, fmt.Errorf("close %s after writing %d bytes: %w", path, n, closeErr)
+	}
+	return protocol.JSONResult(map[string]any{"path": path, "written_bytes": n, "sha256": fmt.Sprintf("%x", sha256.Sum256(content)), "previous_sha256": current}), nil
 }
 
 func (r *Runtime) viewImage(in ImageInput) (protocol.Result, error) {
