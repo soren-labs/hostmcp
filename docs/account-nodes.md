@@ -49,6 +49,14 @@ rmc agent enroll --invite /absolute/path/workstation-worker-invite.json \
 rmc agent run --config "$HOME/.config/rmc/agent.json"
 ```
 
+也可以不保存邀请文件，直接管道传入（`--output -` 拒绝输出到终端）：
+
+```sh
+ssh hub-host rmc device invite --config /absolute/path/hub.json \
+  --id workstation-worker --user worker --output - \
+  | rmc agent enroll --invite - --config "$HOME/.config/rmc/agent.json"
+```
+
 先在前台确认成功，再按需要安装用户服务：
 
 ```sh

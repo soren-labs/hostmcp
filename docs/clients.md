@@ -86,8 +86,8 @@ rmc call --url https://mcp.example.com/mcp \
 工具返回的 session_id 是字符串；续读、输入和终止必须使用原会话所属设备与
 同一个认证主体。完整输入 schema 以客户端通过 tools/list 得到的内容为准。
 
-首版设备工具包括 device_info、exec_command、write_stdin、list_processes、
-terminate_process、read、write_file、apply_patch、view_image。view_image 是
+设备工具包括 device_info、exec_command、write_stdin、list_processes、
+terminate_process、read、search、write_file、apply_patch、view_image。view_image 是
 读取已有图片文件，不是屏幕捕获或桌面控制。
 
 ## 给不同客户端分配 token
@@ -236,7 +236,7 @@ OAuth JWT access token issuer。此功能仅改 Hub，真实 ChatGPT 登录仍�
     --disallowedTools \
       mcp__rmc__exec_command mcp__rmc__write_stdin \
       mcp__rmc__list_processes mcp__rmc__terminate_process \
-      mcp__rmc__read mcp__rmc__write_file \
+      mcp__rmc__read mcp__rmc__search mcp__rmc__write_file \
       mcp__rmc__apply_patch mcp__rmc__view_image \
     --setting-sources '' --disable-slash-commands --no-chrome \
     --no-session-persistence --permission-mode dontAsk \

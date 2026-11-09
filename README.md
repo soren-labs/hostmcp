@@ -67,11 +67,12 @@ too. Builds and other heavy work happen on the device you pick.
 | --- | --- |
 | `list_devices` | Nodes visible to this client, with online state, OS user and UID (remote Hub only) |
 | `device_info` | OS account, UID/GID, groups, working directory and shell of a node |
-| `exec_command` | Run a shell command, optionally in a PTY; returns a session for long-running work |
-| `write_stdin` | Read more output from a session, send input or signals, resize a PTY |
+| `exec_command` | Run a shell command, optionally in a PTY; returns a session for long-running work. Optional `output_mode` and `clean_ansi` |
+| `write_stdin` | Read more output from a session, send input or signals, resize a PTY. Optional `wait_for_exit`, `output_mode` and `clean_ansi` |
 | `list_processes` / `terminate_process` | List and stop the caller's own sessions |
-| `read` | Read files (text line ranges or base64), list directories, show metadata |
-| `write_file` | Create or overwrite a file (text or base64) |
+| `read` | Read files (text line ranges or base64), list directories, show metadata; regular files also report `sha256` |
+| `search` | Find files by `glob`, or search contents with an RE2 or literal `pattern`; read-only, skips hidden, binary and large files |
+| `write_file` | Create or overwrite a file (text or base64); optional `expected_sha256` replaces only an unchanged file |
 | `apply_patch` | Apply a `*** Begin Patch` add/update/delete/move patch |
 | `view_image` | Return a PNG, JPEG or GIF file as MCP image content |
 
@@ -163,6 +164,13 @@ file over a channel you trust; it is single-use and expires after 15 minutes:
 ```sh
 rmc agent enroll --invite laptop-invite.json
 rmc agent run
+```
+
+To skip the file, pipe the invitation straight into enrollment. `--output -`
+refuses to print to a terminal:
+
+```sh
+ssh hub-host rmc device invite --id laptop --user alice --output - | rmc agent enroll --invite -
 ```
 
 **4. Connect a client.** Give each AI client its own token, scoped to the nodes it

@@ -12,7 +12,7 @@ tools act with that account's ordinary privileges.
 | `cmd/rmc` | CLI entry point: `hub`, `device`, `token`, `agent`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `agent` variant. |
 | `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing. Never executes commands. |
 | `internal/agent` | Outbound Agent connection loop with heartbeats and reconnect backoff. |
-| `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `write_file`, `apply_patch`, `view_image`. |
+| `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `search`, `write_file`, `apply_patch`, `view_image`. |
 | `internal/mcpserver` | Maps native tools onto the official MCP Go SDK. |
 | `internal/protocol` | Private Hub↔Agent wire protocol (wire version 1). |
 | `internal/config` | Hub/Agent configuration files and the locked configuration store. |

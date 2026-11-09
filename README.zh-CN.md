@@ -61,11 +61,12 @@ Hub 自己从不执行命令。要管理 Hub 所在的机器，也在那台机�
 | --- | --- |
 | `list_devices` | 当前客户端可见的节点、在线状态、系统用户和 UID（仅远程 Hub） |
 | `device_info` | 节点的系统账户、UID/GID、用户组、工作目录和 Shell |
-| `exec_command` | 执行 Shell 命令，可选 PTY；长任务返回 session |
-| `write_stdin` | 读取 session 的后续输出，发送输入或信号，调整 PTY 尺寸 |
+| `exec_command` | 执行 Shell 命令，可选 PTY；长任务返回 session。可选 `output_mode`、`clean_ansi` |
+| `write_stdin` | 读取 session 的后续输出，发送输入或信号，调整 PTY 尺寸。可选 `wait_for_exit`、`output_mode`、`clean_ansi` |
 | `list_processes` / `terminate_process` | 列出、停止调用者自己的 session |
-| `read` | 读文件（文本行范围或 base64）、列目录、查看元数据 |
-| `write_file` | 创建或覆盖文件（文本或 base64） |
+| `read` | 读文件（文本行范围或 base64）、列目录、查看元数据；普通文件同时返回 `sha256` |
+| `search` | 按 `glob` 查找文件，或用 RE2 / 字面量 `pattern` 搜索内容；只读，跳过隐藏、二进制和大文件 |
+| `write_file` | 创建或覆盖文件（文本或 base64）；可选 `expected_sha256`，仅在内容未变时覆盖 |
 | `apply_patch` | 应用 `*** Begin Patch` 格式的新增/修改/删除/移动补丁 |
 | `view_image` | 把 PNG、JPEG、GIF 文件作为 MCP 图片内容返回 |
 
@@ -154,6 +155,12 @@ rmc device invite --id laptop --user alice --output laptop-invite.json
 ```sh
 rmc agent enroll --invite laptop-invite.json
 rmc agent run
+```
+
+不想保存邀请文件时，可以用管道直接传给设备端（`--output -` 拒绝输出到终端）：
+
+```sh
+ssh hub-host rmc device invite --id laptop --user alice --output - | rmc agent enroll --invite -
 ```
 
 **4. 接入客户端。** 每个 AI 客户端使用自己的 token，只授权它需要的节点：

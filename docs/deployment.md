@@ -28,7 +28,10 @@ init、device invite、agent enroll/run 组成，本页补充网络与常驻服�
 | 临时目录中的 invite.json | 一次性设备邀请，使用后删除副本 |
 
 目录设置 0700，秘密文件设置 0600。不要把部署状态放进 Git checkout。通过
-rmc doctor 和 device_info 确认运行账户、主目录与实际环境。
+rmc doctor 和 device_info 确认运行账户、主目录与实际环境。Hub 机器上可以运行
+`rmc doctor --hub-config /absolute/path/hub.json --hub-url https://mcp.example.com`，
+检查配置、邀请数量、客户端认证模式、监听地址、`/healthz` 和时钟偏差；任一项失败
+时非零退出，且不输出凭据。
 
 Hub 若以独立服务账户运行，本机 `hub configure`、`device invite/revoke` 和
 `token create/update/rotate/revoke` 等管理命令也应使用该账户。例如：
@@ -187,7 +190,8 @@ sudo /usr/local/bin/rmc service uninstall --system --name rmc-root
 
 macOS 系统服务日志位于 `/Library/Logs/RMC/NAME/service.log`，用户服务日志
 位于 `~/Library/Logs/RMC/NAME.log`。卸载可重复执行，保留配置和日志；它不
-代替在 Hub 上撤销设备凭证。
+代替在 Hub 上撤销设备凭证。`hub serve` 和 `agent run` 可加 `--log-format json`，
+每行输出一个 JSON 对象，便于日志系统解析；默认仍为文本。
 
 ## 容器部署 Hub
 
