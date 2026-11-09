@@ -59,6 +59,8 @@ type Hub struct {
 	auditMu         sync.Mutex
 	auditLast       map[string]time.Time
 	auditSuppressed map[string]int64
+	// toolArgs is the native tool surface this Hub advertises to MCP clients.
+	toolArgs toolSet
 }
 
 // defaultRequestDeadline cancels admitted /mcp requests and interrupts their
@@ -84,6 +86,7 @@ type deviceConn struct {
 	id      string
 	hash    string
 	info    protocol.Device
+	tools   toolSet // nil when the Agent did not advertise tool_args
 	conn    *websocket.Conn
 	done    chan struct{}
 	once    sync.Once
@@ -103,6 +106,7 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{store: store, ctx: ctx, cancel: cancel, connections: map[string]*deviceConn{}, known: map[string]protocol.Device{}, requests: make(chan struct{}, 24), enrollments: make(chan struct{}, 2), handshakes: make(chan struct{}, 8), clientSlots: make(map[string]*clientLimit), requestDeadline: defaultRequestDeadline, auditEvery: defaultAuditEvery}
+	h.toolArgs = toolArgsOf(tools)
 	if cfg.CloudflareAccess != nil {
 		h.access, err = cloudflareaccess.New(ctx, *cfg.CloudflareAccess)
 		if err != nil {
@@ -524,7 +528,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	info.DisconnectedAt = time.Time{}
 	info.WireVersion = hello.Version
 	info.Component = "agent"
-	d := &deviceConn{id: id, hash: config.Hash(token), info: info, conn: conn, done: make(chan struct{}), pending: map[string]chan protocol.Message{}}
+	d := &deviceConn{id: id, hash: config.Hash(token), info: info, tools: advertisedTools(hello.ToolArgs), conn: conn, done: make(chan struct{}), pending: map[string]chan protocol.Message{}}
 	h.mu.Lock()
 	old := h.connections[id]
 	h.connections[id] = d
@@ -737,6 +741,9 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 	if !h.store.DeviceValidForUser(d.id, d.hash, d.info.Username) {
 		d.close()
 		return protocol.Result{}, errors.New("device was revoked or its account binding changed; command was not dispatched")
+	}
+	if feature := h.unsupportedFeature(d, tool, args); feature != "" {
+		return protocol.Result{}, fmt.Errorf("device %s runs RMC Agent %s, which does not support %s; upgrade that Agent. Command was not dispatched", device, agentVersion(d), feature)
 	}
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

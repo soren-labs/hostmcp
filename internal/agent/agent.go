@@ -140,7 +140,12 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	defer conn.CloseNow()
 	conn.SetReadLimit(protocol.MaxMessageBytes)
 	helloCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	err = wsjson.Write(helloCtx, conn, protocol.Message{Type: "hello", Version: protocol.WireVersion, Device: &info})
+	hello := protocol.Message{Type: "hello", Version: protocol.WireVersion, Device: &info}
+	if t, ok := executor.(interface{ Tools() []protocol.Tool }); ok {
+		// Lets the Hub refuse features this Agent lacks before dispatching.
+		hello.ToolArgs = protocol.ToolArgNames(t.Tools())
+	}
+	err = wsjson.Write(helloCtx, conn, hello)
 	var welcome protocol.Message
 	if err == nil {
 		err = wsjson.Read(helloCtx, conn, &welcome)
