@@ -194,6 +194,10 @@ func readConfigFile(path string) ([]byte, error) {
 	return b, nil
 }
 
+// ParseJSON strictly decodes one JSON value, rejecting unknown fields and
+// trailing data, like configuration files.
+func ParseJSON(b []byte, out any) error { return decodeJSON(b, out) }
+
 func decodeJSON(b []byte, out any) error {
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
