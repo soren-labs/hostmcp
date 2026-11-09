@@ -62,6 +62,14 @@ Config format, private wire version and component build version are separate:
   `0.2.4-dev` after v0.2.3). The v0.2.3 Cloudflare Access identity mode is
   [Hub-only](cloudflare-access.md); existing Agents require no replacement.
 
+An Agent may send an optional `tool_args` map in hello, listing each native tool
+it runs and that tool's top-level argument names. Before dispatch, a Hub refuses
+a native tool or argument the target Agent does not support, with an "upgrade
+that Agent" error, so the command is not sent. Agents without the field (v0.2.4
+and older) are checked against a fixed table of their tools and arguments.
+Tools and arguments the Hub does not know are passed through unchanged. Wire
+version stays 1, and older Hubs ignore the field.
+
 `TestCompatibilityLegacyAgentWithOAuthHub` sends the old v0.2.1 hello field set to
 the new Hub and dispatches an OAuth-authorized tool over wire v1. The reverse test
 sends new Agent traffic to a minimal legacy-v1 Hub fixture. These are in-process

@@ -24,6 +24,44 @@ are generated from the matching section of this file.
   Agent, so v0.2.x Agents can self-update across the rename.
 - See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
 
+### Added
+
+- New read-only native tool `search`: lists files matching a `glob`, or
+  searches file contents with an RE2 or literal `pattern`. It skips hidden
+  entries unless `include_hidden` is set, binary files and files over 16 MiB,
+  never follows symlinks, and is bounded by `max_results`, `max_bytes`,
+  200,000 visited entries and 20 seconds. Native tools are now ten.
+- `write_stdin.wait_for_exit` keeps waiting up to `yield_time_ms` for the
+  process to exit, instead of returning on the first new output.
+- `output_mode` on `exec_command` and `write_stdin`: `stream` (default, as
+  before), `tail` (newest bytes) or `head_tail` (oldest quarter of the budget
+  and newest bytes). The skip modes mark the gap and report `skipped_bytes`.
+- `clean_ansi` on `exec_command` and `write_stdin` strips ANSI escape sequences
+  and keeps only the final state of progress bars. `output_bytes` still counts
+  raw bytes.
+- `read` reports the `sha256` of the whole file for regular files up to 16 MiB.
+- `write_file.expected_sha256` (with `overwrite: true`) replaces a file only if
+  its current content still has that hash. Otherwise nothing is written, and
+  the error reports the current hash.
+- All new arguments are optional; omitting them keeps the previous behavior.
+
+### Changed
+
+- Agents advertise their native tools and argument names in an optional
+  `tool_args` hello field. Before dispatch, a Hub refuses a native tool or
+  argument that the target Agent does not support, with an "upgrade that Agent;
+  command was not dispatched" error. Agents that do not advertise (v0.2.4 and
+  older) are checked against a fixed table. Wire version stays 1, and older
+  Hubs ignore the field. Using the new tools or arguments through a new Hub
+  requires upgrading that Agent.
+
+### Performance
+
+- Each tool call through the Hub reads its configuration twice instead of four
+  times, and hashes the bearer token once. Revocation semantics are unchanged.
+  A tool call through the Hub takes 351 µs instead of 411 µs (−15%), with 33%
+  fewer allocations (Apple M6, 100 clients, 200 devices).
+
 ## v0.2.4 — 2026-11-04
 
 ### Repository
