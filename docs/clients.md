@@ -86,7 +86,7 @@ rmc call --url https://mcp.example.com/mcp \
 工具返回的 session_id 是字符串；续读、输入和终止必须使用原会话所属设备与
 同一个认证主体。完整输入 schema 以客户端通过 tools/list 得到的内容为准。
 
-首版设备工具包括 device_info、exec_command、write_stdin、list_processes、
+设备工具包括 device_info、exec_command、write_stdin、list_processes、
 terminate_process、read、search、write_file、apply_patch、view_image。view_image 是
 读取已有图片文件，不是屏幕捕获或桌面控制。
 

@@ -44,6 +44,17 @@ are generated from the matching section of this file.
   its current content still has that hash. Otherwise nothing is written, and
   the error reports the current hash.
 - All new arguments are optional; omitting them keeps the previous behavior.
+- Piped enrollment: `rmc device invite --output -` writes the invitation to
+  stdout, and `rmc agent enroll --invite -` reads it from stdin. A device can be
+  added in one pipeline without leaving a credential file on either machine.
+  `--output -` refuses to print to a terminal.
+- `rmc doctor --hub-config` runs Hub checks: configuration privacy and validity,
+  inventory including expired invitations, client authentication modes, listen
+  address and public endpoint. With `--hub-url`, it also checks `/healthz` and
+  clock skew from the HTTP `Date` header. It exits non-zero if any check fails
+  and prints no credentials. Plain `rmc doctor` is unchanged.
+- `--log-format json` for `hub serve` and `agent run` writes each log line as one
+  JSON object. The default stays text, and log call sites are unchanged.
 
 ### Changed
 

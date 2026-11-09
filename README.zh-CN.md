@@ -157,6 +157,12 @@ rmc agent enroll --invite laptop-invite.json
 rmc agent run
 ```
 
+不想保存邀请文件时，可以用管道直接传给设备端（`--output -` 拒绝输出到终端）：
+
+```sh
+ssh hub-host rmc device invite --id laptop --user alice --output - | rmc agent enroll --invite -
+```
+
 **4. 接入客户端。** 每个 AI 客户端使用自己的 token，只授权它需要的节点：
 
 ```sh

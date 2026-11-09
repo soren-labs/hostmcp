@@ -166,6 +166,13 @@ rmc agent enroll --invite laptop-invite.json
 rmc agent run
 ```
 
+To skip the file, pipe the invitation straight into enrollment. `--output -`
+refuses to print to a terminal:
+
+```sh
+ssh hub-host rmc device invite --id laptop --user alice --output - | rmc agent enroll --invite -
+```
+
 **4. Connect a client.** Give each AI client its own token, scoped to the nodes it
 needs:
 
