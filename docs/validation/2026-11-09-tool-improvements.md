@@ -1,12 +1,13 @@
 # Tool improvements validation — 2026-11-09
 
-Scope: PRs #13–#17 and #19 — tool capability checks, Hub configuration reads,
+Scope: PRs #13–#17, #19 and #20 — tool capability checks, Hub configuration reads,
 `wait_for_exit` / `output_mode` / `clean_ansi`, file `sha256` /
 `expected_sha256`, `search`, and the ops CLI (piped enrollment, `doctor` Hub
 checks, `--log-format json`).
 
-Platform: Mac mini, macOS arm64 (Apple M6), Go 1.27.3, golangci-lint 2.15.0.
-End-to-end checks used a loopback port and temporary configuration.
+Platforms: Mac mini, macOS arm64 (Apple M6), and an Ubuntu workstation, Linux
+x86_64 (16 cores); Go 1.27.3 and golangci-lint 2.15.0 on both. End-to-end checks
+ran on the Mac mini only, on a loopback port with temporary configuration.
 
 | Check | Result |
 | --- | --- |
@@ -16,6 +17,14 @@ End-to-end checks used a loopback port and temporary configuration.
 | Local, each branch: `go test -race -count=1` for the touched packages | Pass |
 | `go test -race -count=1 ./...` on `main` after #13–#16 were merged | Pass |
 | `scripts/smoke.py --mode stdio` | Pass: all ten native tools |
+| Local run of every `ci.yml` step (script syntax, `make fmt`, vet, `go test -race ./...`, build, stdio smoke, version/doctor, golangci-lint, govulncheck v1.9.0) on the final code, Linux x86_64 and macOS arm64 | Pass on both |
+
+The first local Linux run found `TestCleanANSIOnPTYProgressBar` depending on how
+the PTY split its output between reads: the Linux PTY delivered the progress bar
+in two reads, while macOS and the GitHub ubuntu-latest runner delivered one. #20
+made the test independent of the split and documented that `clean_ansi` cleans
+each returned chunk separately. On Linux it then passed 20 of 20 repeated runs
+under `-race`.
 
 ## Benchmarks
 
@@ -72,7 +81,7 @@ Separately, `invite --output -` refuses to print in a PTY.
 
 ## Not tested
 
-- Linux hosts other than CI runners.
+- The end-to-end checks on Linux (local CI and the stdio smoke test did run there).
 - Real remote clients (Claude Code, ChatGPT, Claude.ai) through these features,
   including whether they auto-approve the read-only `search` tool.
 - Windows (unsupported).
