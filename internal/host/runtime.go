@@ -418,7 +418,7 @@ func outputModeSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []string{"stream", "tail", "head_tail"}, "description": "When more output is buffered than max_output_bytes: stream (default) returns the oldest bytes and keeps the rest for write_stdin; tail returns the newest bytes; head_tail returns the first quarter of the budget from the oldest bytes and the rest from the newest. tail and head_tail discard the bytes in between, mark the gap in output and report skipped_bytes"}
 }
 func cleanANSISchema() map[string]any {
-	return boolean("Return plain text: strip ANSI escape sequences and control characters, apply backspaces, and keep only the final rewrite of lines redrawn with carriage returns, such as progress bars. output_bytes still counts raw bytes")
+	return boolean("Return plain text: strip ANSI escape sequences and control characters, apply backspaces, and keep only the final rewrite of lines redrawn with carriage returns, such as progress bars. Each call cleans the output it returns, so a line redrawn across two calls appears in both. output_bytes still counts raw bytes")
 }
 
 // Tools lets an Agent advertise the native tools this runtime executes.
