@@ -484,6 +484,12 @@ func (s *Store) DeviceValidForUser(id, hash, username string) bool {
 	if err != nil {
 		return false
 	}
+	return h.DeviceValidForUser(id, hash, username)
+}
+
+// DeviceValidForUser checks a device credential hash and account binding
+// against this configuration snapshot.
+func (h Hub) DeviceValidForUser(id, hash, username string) bool {
 	for _, d := range h.Devices {
 		if d.ID == id && subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(hash)) == 1 {
 			return d.AllowsUser(username)

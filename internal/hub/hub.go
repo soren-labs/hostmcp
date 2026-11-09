@@ -354,7 +354,7 @@ func (h *Hub) protect(next http.Handler) http.Handler {
 			http.Error(w, "origin not allowed", 403)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestSnapshotKey{}, cfg)))
 	})
 }
 
@@ -661,6 +661,10 @@ func (h *Hub) client(principal string) (config.Client, error) {
 	if err != nil {
 		return config.Client{}, errors.New("configuration unavailable")
 	}
+	return h.clientIn(cfg, principal)
+}
+
+func (h *Hub) clientIn(cfg config.Hub, principal string) (config.Client, error) {
 	if h.accessConfigured(cfg) {
 		for _, p := range cfg.CloudflareAccess.Principals {
 			if h.access.MatchesPrincipal(principal, h.accessResource, p.Email) {
@@ -684,11 +688,11 @@ func (h *Hub) client(principal string) (config.Client, error) {
 }
 func (h *Hub) ListDevices(_ context.Context, principal string) ([]protocol.Device, error) {
 	log.Printf("event=tool_call principal=%q tool=list_devices", auditPrincipal(principal))
-	client, err := h.client(principal)
-	if err != nil {
-		return nil, err
-	}
 	cfg, err := h.store.Snapshot()
+	if err != nil {
+		return nil, errors.New("configuration unavailable")
+	}
+	client, err := h.clientIn(cfg, principal)
 	if err != nil {
 		return nil, err
 	}
@@ -725,7 +729,13 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		ctx, cancel = context.WithDeadline(ctx, deadline)
 		defer cancel()
 	}
-	client, err := h.client(principal)
+	// One fresh read after admission queues serves both the client and the
+	// device checks, so revocation still applies immediately before dispatch.
+	cfg, err := h.store.Snapshot()
+	if err != nil {
+		return protocol.Result{}, errors.New("configuration unavailable")
+	}
+	client, err := h.clientIn(cfg, principal)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -738,7 +748,7 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 	if d == nil {
 		return protocol.Result{}, errors.New("device is offline; command was not dispatched")
 	}
-	if !h.store.DeviceValidForUser(d.id, d.hash, d.info.Username) {
+	if !cfg.DeviceValidForUser(d.id, d.hash, d.info.Username) {
 		d.close()
 		return protocol.Result{}, errors.New("device was revoked or its account binding changed; command was not dispatched")
 	}

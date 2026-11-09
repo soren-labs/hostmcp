@@ -17,10 +17,18 @@ import (
 
 type tokenInfoKey struct{}
 
+// requestSnapshotKey carries the configuration snapshot taken by protect for
+// the same request. It is only used before admission queues: tool dispatch
+// reads the configuration again so a revocation during the wait still applies.
+type requestSnapshotKey struct{}
+
 func (h *Hub) authenticate(r *http.Request) (*auth.TokenInfo, int) {
-	cfg, err := h.store.Snapshot()
-	if err != nil {
-		return nil, 503
+	cfg, ok := r.Context().Value(requestSnapshotKey{}).(config.Hub)
+	if !ok {
+		var err error
+		if cfg, err = h.store.Snapshot(); err != nil {
+			return nil, 503
+		}
 	}
 	if len(r.Header.Values("Authorization")) > 1 {
 		return nil, 401
@@ -47,9 +55,12 @@ func (h *Hub) authenticate(r *http.Request) (*auth.TokenInfo, int) {
 	if token == "" {
 		return nil, 401
 	}
-	for _, c := range cfg.Clients {
-		if len(token) >= 32 && len(token) <= 1024 && subtle.ConstantTimeCompare([]byte(config.Hash(token)), []byte(c.TokenHash)) == 1 {
-			return &auth.TokenInfo{UserID: clientPrincipal(c)}, 0
+	if len(token) >= 32 && len(token) <= 1024 {
+		tokenHash := []byte(config.Hash(token))
+		for _, c := range cfg.Clients {
+			if subtle.ConstantTimeCompare(tokenHash, []byte(c.TokenHash)) == 1 {
+				return &auth.TokenInfo{UserID: clientPrincipal(c)}, 0
+			}
 		}
 	}
 	if h.oauth == nil || cfg.OAuth == nil || cfg.OAuth.Issuer != h.oauth.Issuer || strings.TrimSuffix(cfg.PublicURL, "/")+"/mcp" != h.oauth.Resource || !slices.Equal(cfg.OAuth.Scopes, h.oauthScopes) {
