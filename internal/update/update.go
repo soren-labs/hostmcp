@@ -159,16 +159,23 @@ func lock(p Policy) (*os.File, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
+	return lockBinary(p.Binary)
+}
+
+// lockBinary takes the per-executable update lock after checking that the
+// executable and its directories are owned by the caller (or root, for
+// directories) and not writable by others.
+func lockBinary(binary string) (*os.File, error) {
 	if os.Geteuid() == 0 {
 		return nil, errors.New("root node updates are manual; updater refuses to run as root")
 	}
-	if err := safeParents(p.Binary); err != nil {
+	if err := safeParents(binary); err != nil {
 		return nil, err
 	}
-	if _, err := safeFile(p.Binary); err != nil {
+	if _, err := safeFile(binary); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(p.Binary+".update.lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	f, err := os.OpenFile(binary+".update.lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +204,12 @@ func (b *limitedOutput) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 func probe(ctx context.Context, file string) (Identity, error) {
+	return probeAs(ctx, file, "node")
+}
+
+// probeAs runs a candidate's version command and checks that it is the expected
+// component ("all", "hub" or "node") for this platform and wire version.
+func probeAs(ctx context.Context, file, component string) (Identity, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, file, "version")
@@ -211,12 +224,18 @@ func probe(ctx context.Context, file string) (Identity, error) {
 	if err := json.Unmarshal(out.data, &id); err != nil {
 		return id, errors.New("candidate returned invalid version identity")
 	}
-	if id.Component != "node" || id.WireVersion != protocol.WireVersion || id.OS != runtime.GOOS || id.Arch != runtime.GOARCH {
+	if id.Component != component || id.WireVersion != protocol.WireVersion || id.OS != runtime.GOOS || id.Arch != runtime.GOARCH {
 		return id, errors.New("candidate component, platform or wire version mismatch")
 	}
 	return id, nil
 }
 func extract(archive *os.File, out *os.File) error {
+	return extractNamed(archive, out, "rmc-node")
+}
+
+// extractNamed copies the single regular file called name out of a release
+// archive, refusing links, special files and unsafe paths.
+func extractNamed(archive *os.File, out *os.File, executable string) error {
 	if _, err := archive.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -247,11 +266,11 @@ func extract(archive *os.File, out *os.File) error {
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
 			return errors.New("archive links and special files are refused")
 		}
-		if name != "rmc-node" {
+		if name != executable {
 			continue
 		}
 		if found || header.Typeflag != tar.TypeReg {
-			return errors.New("archive must contain exactly one regular rmc-node")
+			return fmt.Errorf("archive must contain exactly one regular %s", executable)
 		}
 		found = true
 		if _, err = io.Copy(out, reader); err != nil {
@@ -267,7 +286,7 @@ func extract(archive *os.File, out *os.File) error {
 		return errors.New("archive trailing data exceeds limit")
 	}
 	if !found {
-		return errors.New("node executable is absent")
+		return fmt.Errorf("%s executable is absent", executable)
 	}
 	return nil
 }

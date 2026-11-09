@@ -35,6 +35,8 @@ COPY --from=build /src/LICENSE /LICENSE
 COPY --from=build /licenses /licenses
 COPY --from=build --chown=10001:10001 /state /state
 USER 10001:10001
+# Containers are updated by pulling a new image, never in place.
+ENV RMC_AUTO_UPDATE=off
 WORKDIR /state
 EXPOSE 8787
 ENTRYPOINT ["/rmc"]

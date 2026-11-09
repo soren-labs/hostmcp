@@ -135,6 +135,25 @@ func (r *Runtime) reap() {
 	}
 }
 
+// Busy reports a tool call in progress or a managed process still running;
+// restarting the node would interrupt either.
+func (r *Runtime) Busy() bool {
+	if len(r.calls) > 0 {
+		return true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, s := range r.sessions {
+		s.mu.Lock()
+		running := s.finishedAt.IsZero()
+		s.mu.Unlock()
+		if running {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Runtime) pruneLocked(now time.Time) {
 	for id, s := range r.sessions {
 		s.mu.Lock()

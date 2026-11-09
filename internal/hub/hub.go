@@ -169,6 +169,10 @@ func (h *Hub) Close() error {
 	return nil
 }
 
+// Idle reports that no MCP request is in progress, so a restart interrupts
+// nothing. Nodes reconnect on their own after the Hub restarts.
+func (h *Hub) Idle() bool { return len(h.requests) == 0 }
+
 // Enrollment never competes with long-running MCP calls for capacity. Client
 // calls also have a four-request per-token limit so one coding agent cannot
 // starve every other principal, and a brief bounded queue absorbs bursts.
@@ -611,7 +615,7 @@ func (h *Hub) heartbeat(d *deviceConn, interval, timeout time.Duration) {
 	}
 }
 func validInfo(d protocol.Device) bool {
-	return len(d.ID) <= 64 && len(d.Hostname) <= 255 && len(d.OS) <= 32 && len(d.Arch) <= 32 && len(d.Username) <= 256 && len(d.UID) <= 32 && len(d.EUID) <= 32 && len(d.ExpectedUser) <= 256 && len(d.Home) <= 4096 && len(d.Version) <= 64
+	return len(d.ID) <= 64 && len(d.Hostname) <= 255 && len(d.OS) <= 32 && len(d.Arch) <= 32 && len(d.Username) <= 256 && len(d.UID) <= 32 && len(d.EUID) <= 32 && len(d.ExpectedUser) <= 256 && len(d.Home) <= 4096 && len(d.Version) <= 64 && len(d.AutoUpdate) <= 16
 }
 
 func (h *Hub) recheckDevices() {

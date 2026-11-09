@@ -87,7 +87,7 @@ func TestHeartbeatWriteTimeoutPreservesCause(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	var workers sync.WaitGroup
-	err := connect(ctx, endpoint, "test-credential", &counterExecutor{}, protocol.Device{ID: "test"}, make(chan struct{}, maxConcurrentRequests), newRequestIDs(), &workers, 20*time.Millisecond, 80*time.Millisecond)
+	err := connect(ctx, endpoint, "test-credential", &counterExecutor{}, protocol.Device{ID: "test"}, make(chan struct{}, maxConcurrentRequests), newRequestIDs(), &workers, 20*time.Millisecond, 80*time.Millisecond, nil)
 	if err == nil || !strings.Contains(err.Error(), "heartbeat failed") || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("ping write timeout lost its cause: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestPeerCloseDuringPingKeepsCloseReason(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	var workers sync.WaitGroup
-	err := connect(ctx, endpoint, "test-credential", &counterExecutor{}, protocol.Device{ID: "test"}, make(chan struct{}, maxConcurrentRequests), newRequestIDs(), &workers, 20*time.Millisecond, time.Second)
+	err := connect(ctx, endpoint, "test-credential", &counterExecutor{}, protocol.Device{ID: "test"}, make(chan struct{}, maxConcurrentRequests), newRequestIDs(), &workers, 20*time.Millisecond, time.Second, nil)
 	if websocket.CloseStatus(err) != websocket.StatusGoingAway {
 		t.Fatalf("peer close reason was replaced by a heartbeat error: %v", err)
 	}
