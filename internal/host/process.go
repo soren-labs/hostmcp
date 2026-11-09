@@ -33,6 +33,8 @@ type ExecInput struct {
 	TimeoutSeconds *int              `json:"timeout_seconds,omitempty"`
 	MaxOutputBytes *int              `json:"max_output_bytes,omitempty"`
 	RequestID      string            `json:"request_id,omitempty"`
+	OutputMode     string            `json:"output_mode,omitempty"`
+	CleanANSI      bool              `json:"clean_ansi,omitempty"`
 }
 
 type StdinInput struct {
@@ -44,6 +46,9 @@ type StdinInput struct {
 	MaxOutputBytes *int   `json:"max_output_bytes,omitempty"`
 	Rows           int    `json:"rows,omitempty"`
 	Cols           int    `json:"cols,omitempty"`
+	WaitForExit    bool   `json:"wait_for_exit,omitempty"`
+	OutputMode     string `json:"output_mode,omitempty"`
+	CleanANSI      bool   `json:"clean_ansi,omitempty"`
 }
 type TerminateInput struct {
 	SessionID string `json:"session_id"`
@@ -95,8 +100,46 @@ func outputOptions(yield, max *int) (time.Duration, int, error) {
 	return time.Duration(y) * time.Millisecond, m, e
 }
 
+// outputMode selects what a drain returns when more output is buffered than
+// max_output_bytes allows. Only stream keeps the rest for the next call.
+type outputMode uint8
+
+const (
+	outputStream   outputMode = iota // oldest bytes first; the rest stays buffered
+	outputTail                       // newest bytes; older unread bytes are skipped
+	outputHeadTail                   // a quarter from the start, the rest from the end
+)
+
+func parseOutputMode(s string) (outputMode, error) {
+	switch s {
+	case "", "stream":
+		return outputStream, nil
+	case "tail":
+		return outputTail, nil
+	case "head_tail":
+		return outputHeadTail, nil
+	}
+	return 0, errors.New("output_mode must be stream, tail or head_tail")
+}
+
+// drainSpec is how one call returns buffered output.
+type drainSpec struct {
+	max   int
+	mode  outputMode
+	clean bool
+}
+
+func newDrainSpec(max int, mode string, clean bool) (drainSpec, error) {
+	m, err := parseOutputMode(mode)
+	return drainSpec{max: max, mode: m, clean: clean}, err
+}
+
 func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInput) (protocol.Result, error) {
 	yield, maxOut, err := outputOptions(in.YieldTimeMS, in.MaxOutputBytes)
+	if err != nil {
+		return protocol.Result{}, err
+	}
+	spec, err := newDrainSpec(maxOut, in.OutputMode, in.CleanANSI)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -174,7 +217,7 @@ func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInpu
 			if s == nil {
 				return protocol.Result{}, fmt.Errorf("request_id already executed as session %s; its output session was recycled and the command will not be replayed", rec.SessionID)
 			}
-			out, e := s.poll(ctx, yield, maxOut, waitForExit)
+			out, e := s.poll(ctx, yield, spec, waitForExit)
 			if e != nil {
 				return protocol.Result{}, e
 			}
@@ -297,7 +340,7 @@ func (r *Runtime) execCommand(ctx context.Context, principal string, in ExecInpu
 			}
 		}()
 	}
-	out, err := s.poll(ctx, yield, maxOut, waitForExit)
+	out, err := s.poll(ctx, yield, spec, waitForExit)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -481,19 +524,49 @@ func (s *session) snapshotLocked() map[string]any {
 	}
 	return o
 }
-func (s *session) drainLocked(max int) map[string]any {
-	n := len(s.pending)
-	if n > max {
-		n = max
+func (s *session) drainLocked(spec drainSpec) map[string]any {
+	end := len(s.pending)
+	if s.finishedAt.IsZero() {
+		end = completeUTF8Prefix(s.pending)
 	}
-	if n < len(s.pending) || s.finishedAt.IsZero() {
-		n = completeUTF8Prefix(s.pending[:n])
+	var text string
+	var returned, skipped int
+	if spec.mode != outputStream && end > spec.max {
+		head := 0
+		if spec.mode == outputHeadTail {
+			head = completeUTF8Prefix(s.pending[:spec.max/4])
+		}
+		tail := end - (spec.max - head)
+		for tail < end && s.pending[tail]&0xc0 == 0x80 {
+			tail++
+		}
+		skipped = tail - head
+		marker := fmt.Sprintf("[... %d bytes skipped ...]\n", skipped)
+		if head > 0 {
+			marker = "\n" + marker
+		}
+		text = string(s.pending[:head]) + marker + string(s.pending[tail:end])
+		returned = head + end - tail
+		s.pending = s.pending[end:]
+	} else {
+		n := min(len(s.pending), spec.max)
+		if n < len(s.pending) || s.finishedAt.IsZero() {
+			n = completeUTF8Prefix(s.pending[:n])
+		}
+		text = string(s.pending[:n])
+		returned = n
+		s.pending = s.pending[n:]
 	}
-	output := strings.ToValidUTF8(string(s.pending[:n]), "\uFFFD")
-	s.pending = s.pending[n:]
+	text = strings.ToValidUTF8(text, string(utf8.RuneError))
+	if spec.clean {
+		text = cleanTerminalText(text)
+	}
 	out := s.snapshotLocked()
-	out["output"] = output
-	out["output_bytes"] = n
+	out["output"] = text
+	out["output_bytes"] = returned
+	if spec.mode != outputStream {
+		out["skipped_bytes"] = skipped
+	}
 	out["dropped_bytes"] = s.dropped
 	out["truncated"] = s.dropped > 0
 	out["has_more_output"] = len(s.pending) > 0
@@ -507,16 +580,20 @@ type pollMode uint8
 const (
 	waitForOutput pollMode = iota
 	waitForExit
+	// waitForExitOnly is write_stdin's explicit wait_for_exit: neither new
+	// output nor a PTY ends the wait, only exit, the deadline or a full
+	// stream-mode budget.
+	waitForExitOnly
 )
 
-func (s *session) poll(ctx context.Context, yield time.Duration, max int, mode pollMode) (map[string]any, error) {
+func (s *session) poll(ctx context.Context, yield time.Duration, spec drainSpec, mode pollMode) (map[string]any, error) {
 	if err := s.acquire(ctx); err != nil {
 		return nil, fmt.Errorf("session %s remains available: %w", s.id, err)
 	}
 	defer s.release()
-	return s.pollLocked(ctx, yield, max, mode)
+	return s.pollLocked(ctx, yield, spec, mode)
 }
-func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int, mode pollMode) (map[string]any, error) {
+func (s *session) pollLocked(ctx context.Context, yield time.Duration, spec drainSpec, mode pollMode) (map[string]any, error) {
 	t := time.NewTimer(yield)
 	defer t.Stop()
 	for {
@@ -528,11 +605,23 @@ func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int, 
 		// return on its first banner while the process is still running. PTYs
 		// and write_stdin return on readable output so prompts remain responsive.
 		// A full output budget also yields early instead of accumulating output
-		// for the whole wait and needlessly overflowing the bounded buffer.
+		// for the whole wait and needlessly overflowing the bounded buffer;
+		// tail and head_tail skip the excess anyway, so they keep waiting.
 		readable := len(s.pending) > 0 && completeUTF8Prefix(s.pending) > 0
-		ready := !s.finishedAt.IsZero() || readable && (mode == waitForOutput || s.tty || len(s.pending) >= max)
+		full := readable && spec.mode == outputStream && len(s.pending) >= spec.max
+		var ready bool
+		switch {
+		case !s.finishedAt.IsZero():
+			ready = true
+		case mode == waitForOutput:
+			ready = readable
+		case mode == waitForExit:
+			ready = readable && s.tty || full
+		default:
+			ready = full
+		}
 		if ready || yield == 0 {
-			out := s.drainLocked(max)
+			out := s.drainLocked(spec)
 			s.mu.Unlock()
 			return out, nil
 		}
@@ -544,7 +633,7 @@ func (s *session) pollLocked(ctx context.Context, yield time.Duration, max int, 
 		case <-s.done:
 		case <-t.C:
 			s.mu.Lock()
-			out := s.drainLocked(max)
+			out := s.drainLocked(spec)
 			s.mu.Unlock()
 			return out, nil
 		}
@@ -563,6 +652,10 @@ func (r *Runtime) owned(principal, id string) (*session, error) {
 
 func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInput) (protocol.Result, error) {
 	yield, max, err := outputOptions(in.YieldTimeMS, in.MaxOutputBytes)
+	if err != nil {
+		return protocol.Result{}, err
+	}
+	spec, err := newDrainSpec(max, in.OutputMode, in.CleanANSI)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -640,7 +733,11 @@ func (r *Runtime) writeStdin(ctx context.Context, principal string, in StdinInpu
 			}
 		}
 	}
-	out, err := s.pollLocked(ctx, yield, max, waitForOutput)
+	mode := waitForOutput
+	if in.WaitForExit {
+		mode = waitForExitOnly
+	}
+	out, err := s.pollLocked(ctx, yield, spec, mode)
 	if err != nil {
 		return protocol.Result{}, err
 	}
@@ -718,7 +815,7 @@ func (r *Runtime) terminate(ctx context.Context, principal string, in TerminateI
 		return protocol.Result{}, fmt.Errorf("stop requested for session %s: %w", s.id, ctx.Err())
 	case <-time.After(2 * time.Second):
 	}
-	out, err := s.poll(ctx, 0, 65536, waitForOutput)
+	out, err := s.poll(ctx, 0, drainSpec{max: 65536}, waitForOutput)
 	if err != nil {
 		return protocol.Result{}, err
 	}
