@@ -7,21 +7,37 @@ are generated from the matching section of this file.
 
 ## Unreleased
 
+### Renamed: Agent is now Node
+
+- The device-side component is now a **node**, because "agent" also names the AI
+  clients that drive RMC. Use `rmc node enroll`, `rmc node run` and `rmc node update`;
+  the `rmc agent …` commands still work.
+- The binary and release archive are now `rmc-node` and `rmc-node_V_OS_ARCH.tar.gz`.
+  `--role node` replaces `--role agent` in service install and `scripts/install.sh`;
+  `agent` is still accepted.
+- The default config is `~/.config/rmc/node.json`. An existing `agent.json` is used
+  when `node.json` is absent. The example service is `rmc-node`, with a
+  `deploy/launchd/io.rmc.node.plist` template; existing installed service names keep working.
+- `list_devices` reports the component as `node`.
+- Nothing changes on the wire: nodes still connect on `/agent/<id>` and send `agent`
+  as their hello component, so old and new versions interoperate.
+- The legacy `hostmcp-agent_…` release archives are no longer published. The v0.2.x
+  updater accepts only the `agent` component, so move those nodes to this release once
+  by hand. See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
+
 ### Renamed: HostMCP is now RMC (Remote Machine Control)
 
 - The project, repository, Go module and binaries are now `rmc`,
-  `rmc-hub` and `rmc-agent` (`github.com/soren-labs/rmc`). The README
+  `rmc-hub` and `rmc-node` (`github.com/soren-labs/rmc`). The README
   leads with what RMC is for: letting web, mobile, desktop and terminal AI
   clients work on your own machines through one self-hosted endpoint.
-- Nothing changes on the wire: Hub↔Agent wire version 1, MCP tools, arguments
+- Nothing changes on the wire: Hub↔node wire version 1, MCP tools, arguments
   and configuration formats are the same, and mixed RMC/HostMCP v0.2.x Hubs
   and Agents interoperate.
 - Existing installations keep working: the default config falls back to
   `~/.config/hostmcp/` when only that file exists, `HOSTMCP_TOKEN` is read when
   `RMC_TOKEN` is unset, and `service install`/`uninstall` accept existing
   `hostmcp-…` services with their original launchd labels and log directories.
-- Releases also publish `hostmcp-agent_V_OS_ARCH.tar.gz`, containing the RMC
-  Agent, so v0.2.x Agents can self-update across the rename.
 - See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
 
 ### Added

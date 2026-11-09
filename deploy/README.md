@@ -16,9 +16,9 @@ location before installing the service.
 Run enrollment and installation as the account that should execute tools:
 
 ```sh
-rmc agent enroll --invite invitation.json --config "$HOME/.config/rmc/agent.json"
-rmc service install --role agent --name rmc-my-node \
-  --config "$HOME/.config/rmc/agent.json"
+rmc node enroll --invite invitation.json --config "$HOME/.config/rmc/node.json"
+rmc service install --role node --name rmc-my-node \
+  --config "$HOME/.config/rmc/node.json"
 ```
 
 Linux uses the user's systemd manager. Enable that user's linger if the service
@@ -33,12 +33,12 @@ privileges remain in effect. If it has sudo access, the node also has that acces
 
 ```sh
 sudo install -m 0755 ./rmc /usr/local/bin/rmc
-sudo -u worker /usr/local/bin/rmc agent enroll \
+sudo -u worker /usr/local/bin/rmc node enroll \
   --invite /path/readable-by-worker/invitation.json \
-  --config /home/worker/.config/rmc/agent.json
+  --config /home/worker/.config/rmc/node.json
 sudo /usr/local/bin/rmc service install --system --user worker \
-  --role agent --name rmc-workstation-worker \
-  --config /home/worker/.config/rmc/agent.json
+  --role node --name rmc-workstation-worker \
+  --config /home/worker/.config/rmc/node.json
 ```
 
 The service is enabled at boot, independent of the account's login session.
@@ -52,10 +52,10 @@ through its parent directories. No directory allowlist, command allowlist,
 Enroll a separate root node with its own invitation, configuration and name:
 
 ```sh
-sudo /usr/local/bin/rmc agent enroll --invite /root/root-invitation.json \
+sudo /usr/local/bin/rmc node enroll --invite /root/root-invitation.json \
   --config /var/lib/rmc/root.json
 sudo /usr/local/bin/rmc service install --system --user root \
-  --role agent --name rmc-workstation-root --config /var/lib/rmc/root.json
+  --role node --name rmc-workstation-root --config /var/lib/rmc/root.json
 ```
 
 A root service requires root-owned binary/configuration paths whose parents

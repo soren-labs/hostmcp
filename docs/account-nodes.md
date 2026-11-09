@@ -1,14 +1,14 @@
-# 账户节点与 Agent 权限
+# 账户节点与权限
 
 RMC 的权限粒度是**机器上的系统账户**。一个 `device` ID 表示一个账户节点，
 不是自动包含该物理机器所有账户的入口。同机需要两个权限等级时，运行两个独立
-Agent 服务，各自有邀请、配置、设备凭证和节点 ID。
+节点服务，各自有邀请、配置、设备凭证和节点 ID。
 
 | 节点 ID 示例 | 所在机器 | 实际运行账户 | 可授予的客户端示例 |
 | --- | --- | --- | --- |
-| workstation-worker | Linux 工作站 | worker | Codex 编码 Agent |
-| workstation-root | 同一台 Linux 工作站 | root | Claude Code 运维 Agent |
-| mac-developer | Mac mini | developer | Codex 或 Claude Code 开发 Agent |
+| workstation-worker | Linux 工作站 | worker | Codex 编码智能体 |
+| workstation-root | 同一台 Linux 工作站 | root | Claude Code 运维智能体 |
+| mac-developer | Mac mini | developer | Codex 或 Claude Code 开发智能体 |
 
 这些名称只是示例。安装前先确认目标账户已经存在。获得节点访问权的客户端可以
 执行该账户能执行的任何命令、读写该账户能访问的文件；没有更细的命令或目录策略。
@@ -30,8 +30,8 @@ rmc device invite --config /absolute/path/hub.json \
 `--user` 将预期账户写入邀请和注册配置；节点必须以该账户运行才能接入。
 这是防止部署身份出错的检查，不是额外的沙箱。为新部署显式设置 `--user`。
 已有 v0.1.0 未绑定账户的节点仍按原配置工作；要加绑定，可撤销后重新邀请。
-**重新加入前必须先停掉旧 Agent 服务，将原来的 `agent.json` 以私有权限移出原路径
-或删除**：`agent enroll` 为避免覆盖现有秘密会拒绝写入已存在的配置文件。新邀请只能
+**重新加入前必须先停掉旧节点服务，将原来的 `node.json`（v0.2 及以前为 `agent.json`）以私有权限移出原路径
+或删除**：`node enroll` 为避免覆盖现有秘密会拒绝写入已存在的配置文件。新邀请只能
 兑换一次，成功后使用新配置重启对应的单个服务；不要同时运行旧配置与新配置。
 
 把两个邀请文件分别安全传到目标设备。邀请有有效期且只能兑换一次；不要将它们
@@ -44,9 +44,9 @@ rmc device invite --config /absolute/path/hub.json \
 ```sh
 umask 077
 mkdir -p "$HOME/.config/rmc"
-rmc agent enroll --invite /absolute/path/workstation-worker-invite.json \
-  --config "$HOME/.config/rmc/agent.json"
-rmc agent run --config "$HOME/.config/rmc/agent.json"
+rmc node enroll --invite /absolute/path/workstation-worker-invite.json \
+  --config "$HOME/.config/rmc/node.json"
+rmc node run --config "$HOME/.config/rmc/node.json"
 ```
 
 也可以不保存邀请文件，直接管道传入（`--output -` 拒绝输出到终端）：
@@ -54,14 +54,14 @@ rmc agent run --config "$HOME/.config/rmc/agent.json"
 ```sh
 ssh hub-host rmc device invite --config /absolute/path/hub.json \
   --id workstation-worker --user worker --output - \
-  | rmc agent enroll --invite - --config "$HOME/.config/rmc/agent.json"
+  | rmc node enroll --invite - --config "$HOME/.config/rmc/node.json"
 ```
 
 先在前台确认成功，再按需要安装用户服务：
 
 ```sh
-rmc service install --role agent \
-  --config "$HOME/.config/rmc/agent.json" \
+rmc service install --role node \
+  --config "$HOME/.config/rmc/node.json" \
   --name rmc-workstation-worker
 ```
 
@@ -71,7 +71,7 @@ Mac LaunchAgent 依赖登录会话。需要无人登录时随系统启动，可�
 
 ```sh
 sudo /usr/local/bin/rmc service install --system --user worker \
-  --role agent --config /home/worker/.config/rmc/agent.json \
+  --role node --config /home/worker/.config/rmc/node.json \
   --name rmc-workstation-worker
 ```
 
@@ -84,11 +84,11 @@ sudo /usr/local/bin/rmc service install --system --user worker \
 root 是明确选择的第二个节点。以管理员身份注册并安装系统服务：
 
 ```sh
-sudo /usr/local/bin/rmc agent enroll \
+sudo /usr/local/bin/rmc node enroll \
   --invite /absolute/path/workstation-root-invite.json \
   --config /var/lib/rmc/root.json
 sudo /usr/local/bin/rmc service install --system --user root \
-  --role agent --config /var/lib/rmc/root.json \
+  --role node --config /var/lib/rmc/root.json \
   --name rmc-workstation-root
 ```
 
@@ -100,7 +100,7 @@ Linux 使用 systemd system service，macOS 使用 LaunchDaemon。macOS 的系�
 注册成功后删除对应的一次性邀请副本。通过 `list_devices` 和 `device_info`
 核对 username/UID，再执行 `id -u` 确认真实子进程身份。
 
-## 4. 给不同 Agent 发不同凭证
+## 4. 给不同 AI 客户端发不同凭证
 
 在 Hub 上执行：
 
@@ -113,7 +113,7 @@ rmc token create --config /absolute/path/hub.json \
   --output /absolute/path/claude-admin.token
 ```
 
-在对应 Agent 客户端配置自己的 token 文件，见[客户端接入](clients.md)。两个
+在对应 AI 客户端配置自己的 token 文件，见[客户端接入](clients.md)。两个
 客户端连接同一 Hub URL，但只会列出、访问各自获准的节点。一个 token 可以访问
 多台机器，也可以同时访问同机多个账户；权限由 `--devices` 中的节点 ID 决定。
 
@@ -165,4 +165,4 @@ sudo /usr/local/bin/rmc service uninstall --system --name rmc-workstation-root
 再需要时由所有者清理相应配置和二进制。
 
 `token update` 保留凭证而改变授权节点；`token rotate` 保留客户端身份和范围，
-立即令旧凭证失效。轮换时需要把新 token 文件分发到对应 Agent。
+立即令旧凭证失效。轮换时需要把新 token 文件分发到对应 AI 客户端。

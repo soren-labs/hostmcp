@@ -2,23 +2,23 @@
 
 RMC is a self-hosted MCP gateway for Linux and macOS, written in Go. A Hub
 authenticates MCP clients and routes tool calls over outbound WebSocket
-connections to native device Agents. Each Agent runs as one OS account and its
+connections to native device nodes. Each node runs as one OS account and its
 tools act with that account's ordinary privileges.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `cmd/rmc` | CLI entry point: `hub`, `device`, `token`, `agent`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `agent` variant. |
+| `cmd/rmc` | CLI entry point: `hub`, `device`, `token`, `node`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `node` variant. |
 | `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing. Never executes commands. |
-| `internal/agent` | Outbound Agent connection loop with heartbeats and reconnect backoff. |
+| `internal/node` | Outbound node connection loop with heartbeats and reconnect backoff. |
 | `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `search`, `write_file`, `apply_patch`, `view_image`. |
 | `internal/mcpserver` | Maps native tools onto the official MCP Go SDK. |
-| `internal/protocol` | Private Hub↔Agent wire protocol (wire version 1). |
-| `internal/config` | Hub/Agent configuration files and the locked configuration store. |
+| `internal/protocol` | Private Hub↔node wire protocol (wire version 1). |
+| `internal/config` | Hub/node configuration files and the locked configuration store. |
 | `internal/oauth`, `internal/cloudflareaccess` | JWT access-token and Access-assertion verifiers. |
 | `internal/service` | systemd and launchd user/system service installers. |
-| `internal/update` | Opt-in, checksum-pinned Agent updater. |
+| `internal/update` | Opt-in, checksum-pinned node updater. |
 | `scripts/` | Smoke tests, packaging, installer and release helpers. |
 | `docs/` | User documentation. `docs/validation/` holds test evidence. |
 | `deploy/` | Docker, Caddy, Cloudflare Tunnel and hand-written service examples. |

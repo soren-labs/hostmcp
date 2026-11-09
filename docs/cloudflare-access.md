@@ -4,7 +4,7 @@ RMC supports an optional **Hub-only** backend identity mode for Cloudflare
 Access (introduced in HostMCP v0.2.3). ChatGPT and other remote MCP clients connect to the public `/mcp` URL.
 Access handles authorization code/PKCE, login and OAuth token issuance at the edge.
 The Hub validates the signed `Cf-Access-Jwt-Assertion` forwarded to the origin.
-Agent configuration, device credentials, native authority and wire version 1 do
+Node configuration, device credentials, native authority and wire version 1 do
 not change. This source change has **not** acceptance-tested a real ChatGPT login,
 Cloudflare application or deployed origin. No deployment is performed by these
 instructions or the local tests.
@@ -71,7 +71,7 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
 1. Review and build/install an RMC Hub (v0.3.0 or later; HostMCP v0.2.3+ also
    supports this mode) using the existing release
    procedure. Back up the existing Hub config privately before configuring it.
-   No Agent upgrade or re-enrollment is required.
+   No node upgrade or re-enrollment is required.
 2. In the intended Cloudflare account, review the self-hosted Access application's
    public hostname and `/mcp` path, identity policies and Managed OAuth setting.
    Use that application's AUD and the Zero Trust team's domain in the policy file.
@@ -114,8 +114,8 @@ not remove Access, and removing Access does not alter OAuth or legacy credential
    the real edge/client pair. **These ChatGPT/Cloudflare acceptance steps remain
    untested by this change.** Isolated SDK tests cannot establish that acceptance.
 
-Protecting `/mcp` with Managed OAuth must not turn `/agent/` or `/enroll` into
-interactive OAuth endpoints. Agents continue using outbound WebSockets and device
+Protecting `/mcp` with Managed OAuth must not turn `/agent/` (the node connection path, kept from before v0.3) or `/enroll` into
+interactive OAuth endpoints. Nodes continue using outbound WebSockets and device
 bearers; enrollment requires a valid one-use invitation. Neither endpoint trusts
 Access assertions, OAuth client bearers or email headers. Preserve the deployment's
 existing connectivity and separate credential mechanisms for these paths.
@@ -196,10 +196,10 @@ go test -race ./internal/hub -run '^TestAccess' -count=1
 ```
 
 These tests generate ephemeral RSA keys/JWTs, serve certs and MCP HTTP in memory,
-and frame an unchanged legacy Agent handshake over `net.Pipe`. They test scoped
+and frame an unchanged legacy node handshake over `net.Pipe`. They test scoped
 SDK calls, wire dispatch identity, real isolated process-session ownership,
 invalid credentials, cert failures/timeouts/rotation, revocation, mode coexistence,
-and agent/enrollment isolation. No real Access team, deployed service, live account,
+and node/enrollment isolation. No real Access team, deployed service, live account,
 browser, installed application or production config is contacted. See the
 [v0.2.3 validation record](validation/v0.2.3-cloudflare-access.md) for command results and
 environment limits.

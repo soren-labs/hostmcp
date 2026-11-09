@@ -2,7 +2,7 @@
 
 ## 明确的信任关系
 
-设备所有者主动安装并启动 Agent，将这个账户的命令和文件能力交给所连接的
+设备所有者主动安装并启动节点，将这个账户的命令和文件能力交给所连接的
 Hub。拥有相应客户端 token 的调用方，可以对获准设备执行该用户能执行的操作。
 这包含调用其现有工具、读取其可读文件、修改其可写文件，以及使用已有 SSH
 配置等。客户端自己的审批策略仍然生效。
@@ -27,7 +27,7 @@ root 节点分别注册、分别运行、使用不同设备凭证；客户端 to
 | --- | --- | --- |
 | 客户端 bearer | 调用 Hub 的 MCP 工具 | 客户端 token 文件 |
 | 单次设备邀请 | 限时加入指定 device ID | 临时邀请文件 |
-| 设备凭证 | Agent 连接 Hub | Agent 配置文件 |
+| 设备凭证 | 节点连接 Hub | 节点配置文件 |
 | Cloudflare Tunnel 凭证 | 发布 Hub 网络入口 | cloudflared 配置目录 |
 
 这些凭证不可互相替代。Hub 需要验证每次 MCP 请求；可猜到的 device ID 或
@@ -73,21 +73,21 @@ Cloudflare Tunnel 提供网络路径与 TLS，不自动提供 RMC 的用户授�
 增加独立可选的 [Cloudflare Access Managed OAuth assertion 验证](cloudflare-access.md)：
 Hub 验证签名、issuer、应用 AUD 和有效时间后，将 email 映射到显式节点；不信任
 单独的邮箱 header。真实 ChatGPT/Access 登录仍未验收。Access 策略应限定在目标
-MCP 路径；内置 agent、connect 和 agent enroll 仍不提供 Access 服务凭证 headers，
-不能将整域邮箱登录保护套到 `/agent/` 或 `/enroll` 自动化连接上。它们继续使用
+MCP 路径；内置的 `node run`、`connect` 和 `node enroll` 仍不提供 Access 服务凭证 headers，
+不能将整域邮箱登录保护套到 `/agent/`（节点连接路径，保留 v0.3 前的名称）或 `/enroll` 自动化连接上。它们继续使用
 独立的设备凭证与一次性邀请。
 
 已发布 v0.2.1 使用静态 bearer；新源码可选 [外部 OAuth 资源服务器](oauth.md)：
 提供 RFC 9728 元数据与 challenge，验证外部 issuer 的 RS256/ES256 JWT、audience、
 expiry 和 scope。授权服务器负责注册、PKCE、登录和刷新；RMC 不自建身份服务。
 OAuth subject 与客户端 ID 的会话身份独立于 legacy owner；scope 不能授予节点，
-每个 subject 必须显式列出节点且不能使用 `*`。现有 bearer 和 agent 凭证保留。
+每个 subject 必须显式列出节点且不能使用 `*`。现有 bearer 和节点凭证保留。
 不能把这些能力等同于所有 SaaS MCP 宿主实测兼容。
 
-[Agent 更新器](components-updates.md)仅接受本机私有 opt-in 策略、固定官方 HTTPS
+[节点更新器](components-updates.md)仅接受本机私有 opt-in 策略、固定官方 HTTPS
 源、准确 stable 版本与独立配置的 SHA-256。Hub 不下发下载地址；验证失败保留原
 二进制，成功原子替换并保留一份本地回滚副本。拒绝 root，不自动重启服务，不
-声称有签名发行证明或重启后的自动回滚。它只更新 agent 角色，不改变 OS 权限。
+声称有签名发行证明或重启后的自动回滚。它只更新节点角色，不改变 OS 权限。
 
 ## 完整用户权限的边界
 
@@ -99,14 +99,14 @@ OAuth subject 与客户端 ID 的会话身份独立于 legacy owner；scope 不�
 - 输出、文件大小、并发和 session 数量的上限是资源边界，不是目录权限白名单。
 - 已进入并发槽位的远端 MCP HTTP 请求有 48 秒截止时间；到期取消请求并打断
   阻塞的网络读写，使遵循 context 的处理器和订阅流退出、释放槽位，日志为
-  `event=mcp_deadline`。它不能抢占忽略取消的任意 Go 代码，也不终止已经在 Agent
+  `event=mcp_deadline`。它不能抢占忽略取消的任意 Go 代码，也不终止已经在节点
   上启动的命令；命令时限由 `timeout_seconds` 控制。满载拒绝记为 `event=mcp_busy`。
   此截止覆盖接收请求体和 Hub 等待工具结果的时间；旧 MCP 协议也保留同一绝对截止。
 - 同一客户端凭证最多同时占用 4 个远端 MCP HTTP 请求，全局容量为 24；
   设备邀请加入有独立的 2 个槽位。满载时短暂排队并返回 503，调用方须退避重试。
 - `apply_patch` 更新现有文件时保留其 inode、所有者及权限位；但多文件补丁
   **不是跨文件原子事务**，写入失败时可能需要人工检查部分成功的操作。
-- shell 的普通后台进程随托管命令的进程组结束而退出，Agent 进程重启会丢失
+- shell 的普通后台进程随托管命令的进程组结束而退出，节点进程重启会丢失
   托管会话。需要跨服务重启存活的任务，应使用独立的 systemd/launchd 服务。
 - 执行器返回的文件内容和命令输出是不可信数据，MCP 客户端应按数据处理，不能
   将其中的指令当成新的用户授权。
