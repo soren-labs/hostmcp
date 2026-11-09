@@ -409,6 +409,9 @@ func boolean(description string) map[string]any {
 	return map[string]any{"type": "boolean", "description": description}
 }
 
+// Tools lets an Agent advertise the native tools this runtime executes.
+func (r *Runtime) Tools() []protocol.Tool { return Tools() }
+
 func Tools() []protocol.Tool {
 	return []protocol.Tool{
 		{Name: "device_info", Description: "Report the native OS account, device, working directory and effective UID. No secrets or environment variables are dumped.", ReadOnly: true, InputSchema: obj(map[string]any{})},

@@ -4,6 +4,7 @@ package protocol
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 )
 
@@ -69,6 +70,26 @@ type Message struct {
 	Device       *Device         `json:"device,omitempty"`
 	Result       *Result         `json:"result,omitempty"`
 	Error        string          `json:"error,omitempty"`
+	// ToolArgs is optional in an Agent hello: each native tool the Agent
+	// executes and its accepted top-level argument names. Older Agents omit it
+	// and older Hubs ignore it.
+	ToolArgs map[string][]string `json:"tool_args,omitempty"`
+}
+
+// ToolArgNames returns each tool's top-level input property names, sorted.
+func ToolArgNames(tools []Tool) map[string][]string {
+	out := make(map[string][]string, len(tools))
+	for _, t := range tools {
+		names := []string{}
+		if props, ok := t.InputSchema["properties"].(map[string]any); ok {
+			for name := range props {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		out[t.Name] = names
+	}
+	return out
 }
 
 type Executor interface {
