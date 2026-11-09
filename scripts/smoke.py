@@ -31,7 +31,7 @@ import zlib
 
 PROTOCOL = "2025-11-25"
 TOOLS = {"device_info", "exec_command", "write_stdin", "list_processes",
-         "terminate_process", "read", "write_file", "apply_patch", "view_image"}
+         "terminate_process", "read", "write_file", "apply_patch", "view_image", "search"}
 
 
 def check(condition, message):
@@ -233,6 +233,15 @@ class DeviceSmoke:
         check(base64.b64decode(encoded) == binary, "binary file roundtrip failed")
         self.checks.append("unicode_paths_patch_binary")
 
+        found = self.call("search", path=directory, pattern="第三行")
+        check(found.get("mode") == "content"
+              and [(m["path"], m["line"]) for m in found["matches"]] == [("中文 目录/测试 文件.txt", 2)]
+              and found["skipped"]["binary"] == 1,
+              "search did not find exactly the patched line")
+        listed = self.call("search", path=directory, glob="*.bin")
+        check([entry["path"] for entry in listed["entries"]] == ["binary.bin"], "search glob listing failed")
+        self.checks.append("native_search")
+
         png = tiny_png()
         image_path = directory + "/pixel.png"
         self.call("write_file", path=image_path, encoding="base64", content=base64.b64encode(png).decode("ascii"))
@@ -276,7 +285,7 @@ class DeviceSmoke:
         self.finish(repeated)
         check(self.read_text(marker) == "once\n", "idempotent request repeated a filesystem side effect")
         self.checks.append("idempotent_side_effect")
-        check(TOOLS <= self.tools, "not all nine native tools were exercised")
+        check(TOOLS <= self.tools, "not all ten native tools were exercised")
         return uid
 
     def cleanup(self):
