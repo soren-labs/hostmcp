@@ -40,13 +40,13 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
 
   rmc stdio
   rmc hub init [--config FILE] [--listen HOST:PORT] [--public-url URL]
-  rmc hub serve [--config FILE]
+  rmc hub serve [--config FILE] [--log-format text|json]
   rmc hub configure [--config FILE] [--public-url URL] [--listen HOST:PORT]
-  rmc device invite --id NAME --output INVITE.json [--user OS_USER] [--config HUB.json]
+  rmc device invite --id NAME --output INVITE.json|- [--user OS_USER] [--config HUB.json]
   rmc device revoke --id NAME [--config HUB.json]
   rmc device list [--config HUB.json]
-  rmc agent enroll --invite INVITE.json [--config AGENT.json]
-  rmc agent run [--config AGENT.json]
+  rmc agent enroll --invite INVITE.json|- [--config AGENT.json]
+  rmc agent run [--config AGENT.json] [--log-format text|json]
   rmc agent update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
   rmc token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
   rmc token list [--config HUB.json]
@@ -57,7 +57,7 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
   rmc call --url URL --token-file TOKEN --tool list_devices --args '{}'
   rmc service install --role hub|agent --config FILE [--name rmc-NAME] [--system --user OS_USER]
   rmc service uninstall --name rmc-NAME [--system]
-  rmc doctor
+  rmc doctor [--hub-config HUB.json] [--hub-url URL]
   rmc version
 
 Run a subcommand with --help for flags. Secrets are written to private files.
@@ -294,7 +294,11 @@ func hubCommand(ctx context.Context, args []string) error {
 			return nil
 		})
 	case "serve":
+		logFormat := f.String("log-format", "text", "log output: text or json (one object per line)")
 		if err := parse(f, args[1:]); err != nil {
+			return err
+		}
+		if err := setLogFormat(*logFormat); err != nil {
 			return err
 		}
 		store := config.NewStore(*path)
@@ -346,7 +350,7 @@ func deviceCommand(args []string) error {
 	path := f.String("config", defaultFile("hub.json"), "hub configuration path")
 	id := f.String("id", "", "device ID")
 	expectedUser := f.String("user", "", "bind this node to an expected OS username (optional)")
-	output := f.String("output", "", "private invitation JSON output file")
+	output := f.String("output", "", "private invitation JSON output file, or - for stdout to pipe into agent enroll --invite -")
 	ttl := f.Duration("ttl", 15*time.Minute, "invitation lifetime (maximum 24h)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
@@ -354,12 +358,24 @@ func deviceCommand(args []string) error {
 	store := config.NewStore(*path)
 	switch args[0] {
 	case "invite":
-		if err := absent(*output); err != nil {
+		toStdout := *output == "-"
+		if toStdout {
+			if isTerminal(os.Stdout) {
+				return errors.New("refusing to print a single-use device credential to a terminal; pipe it (rmc device invite ... --output - | ssh HOST rmc agent enroll --invite -) or use --output FILE")
+			}
+		} else if err := absent(*output); err != nil {
 			return err
 		}
 		i, err := store.InviteDeviceForUser(*id, *expectedUser, *ttl)
 		if err != nil {
 			return err
+		}
+		if toStdout {
+			if err = json.NewEncoder(os.Stdout).Encode(i); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "Created single-use invitation for %s on stdout; expires %s.\n", *id, i.ExpiresAt.Format(time.RFC3339))
+			return nil
 		}
 		if err = config.WriteJSON(*output, i, false); err != nil {
 			return err
@@ -549,7 +565,8 @@ func agentCommand(ctx context.Context, args []string) error {
 	}
 	f := flags("agent " + args[0])
 	path := f.String("config", defaultFile("agent.json"), "device agent configuration path")
-	invitePath := f.String("invite", "", "single-use invitation JSON")
+	invitePath := f.String("invite", "", "single-use invitation JSON file, or - to read it from stdin")
+	logFormat := f.String("log-format", "text", "agent run log output: text or json (one object per line)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
@@ -561,8 +578,8 @@ func agentCommand(ctx context.Context, args []string) error {
 		if *invitePath == "" {
 			return errors.New("--invite is required")
 		}
-		var i config.Invite
-		if err := config.ReadJSON(*invitePath, &i); err != nil {
+		i, err := readInvite(*invitePath, os.Stdin)
+		if err != nil {
 			return err
 		}
 		if i.Version != 1 || !config.ValidID(i.DeviceID) || len(i.Token) < 32 {
@@ -606,6 +623,9 @@ func agentCommand(ctx context.Context, args []string) error {
 		fmt.Fprintf(os.Stderr, "Enrolled %s; credentials saved privately in %s.\n", a.DeviceID, *path)
 		return nil
 	case "run":
+		if err := setLogFormat(*logFormat); err != nil {
+			return err
+		}
 		var a config.Agent
 		if err := config.ReadJSON(*path, &a); err != nil {
 			return err
@@ -712,11 +732,32 @@ func serviceCommand(args []string) error {
 
 func doctor(ctx context.Context, args []string) error {
 	f := flags("doctor")
+	hubConfig := f.String("hub-config", "", "check this Hub configuration (default for rmc-hub: the standard hub.json)")
+	hubURL := f.String("hub-url", "", "also check a running Hub: /healthz and clock skew, e.g. https://mcp.example.com")
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	if component == "hub" {
-		return printJSON(map[string]any{"version": version, "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer, optional external OAuth JWT and Cloudflare Access assertions"})
+	if component == "hub" && *hubConfig == "" {
+		*hubConfig = defaultFile("hub.json")
+	}
+	if *hubConfig != "" || *hubURL != "" {
+		if *hubConfig == "" {
+			*hubConfig = defaultFile("hub.json")
+		}
+		checks := hubChecks(ctx, *hubConfig, *hubURL)
+		failed := 0
+		for _, c := range checks {
+			if !c.OK {
+				failed++
+			}
+		}
+		if err := printJSON(map[string]any{"version": version, "component": component, "wire_version": protocol.WireVersion, "transport_auth": "legacy bearer, optional external OAuth JWT and Cloudflare Access assertions", "checks": checks}); err != nil {
+			return err
+		}
+		if failed > 0 {
+			return fmt.Errorf("doctor: %d of %d Hub checks failed", failed, len(checks))
+		}
+		return nil
 	}
 	rt, err := host.New()
 	if err != nil {
