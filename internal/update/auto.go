@@ -531,6 +531,12 @@ func (u *Updater) install(ctx context.Context, c candidate, asset ghAsset, diges
 	if err = extractNamed(compressed, staged, executableName(u.Component)); err != nil {
 		return err
 	}
+	// A successful restart replaces this process, so the deferred cleanup
+	// never runs: remove the downloaded archive before going further.
+	_ = compressed.Close()
+	if err = os.Remove(compressed.Name()); err != nil {
+		return err
+	}
 	if err = staged.Chmod(original.Mode().Perm()); err != nil {
 		return err
 	}

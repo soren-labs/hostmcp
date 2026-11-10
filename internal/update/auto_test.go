@@ -210,6 +210,14 @@ func TestAutoUpdateInstallsSignedReleaseAndRestarts(t *testing.T) {
 	busy := atomic.Bool{}
 	busy.Store(true)
 	u.Idle = func() bool { return !busy.Load() }
+	// A real restart is syscall.Exec, so deferred cleanup never runs: no
+	// staging file may be left beside the binary by the time it restarts.
+	leftovers := []string{"not restarted"}
+	u.Restart = func() error {
+		restarts.Add(1)
+		leftovers, _ = filepath.Glob(filepath.Join(filepath.Dir(u.Binary), ".rmc-*"))
+		return nil
+	}
 	go func() { time.Sleep(50 * time.Millisecond); busy.Store(false) }()
 	res, err := u.Check(context.Background(), true)
 	if err != nil || res.Available != "0.3.1" {
@@ -217,6 +225,9 @@ func TestAutoUpdateInstallsSignedReleaseAndRestarts(t *testing.T) {
 	}
 	if installedVersion(t, u.Binary) != "0.3.1" || installedVersion(t, u.Binary+".previous") != "0.3.0" || restarts.Load() != 1 {
 		t.Fatalf("install: binary=%s restarts=%d", installedVersion(t, u.Binary), restarts.Load())
+	}
+	if len(leftovers) != 0 {
+		t.Fatalf("staging files left at restart: %v", leftovers)
 	}
 	st, _ := LoadState(u.StateFile)
 	if st.Pending == nil || st.Pending.From != "0.3.0" || st.Pending.To != "0.3.1" || st.LastResult == "" {
