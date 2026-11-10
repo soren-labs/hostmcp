@@ -153,6 +153,12 @@ are generated from the matching section of this file.
 
 ### Fixed
 
+- A tool call canceled while the Hub was still writing its request to the
+  node (an MCP client canceling, or the request deadline passing) closed that
+  node's connection, failing every other call on the node until it
+  reconnected. The Hub now finishes writing the request, within the existing
+  10-second write timeout, and reports the canceled call's outcome as unknown
+  as before.
 - `search` with an anchored pattern such as `^func` or `;$` matched only on
   the first or last line of a file, because a whole-file pre-check applied
   `^` and `$` to the whole file. Anchored patterns now skip that pre-check and

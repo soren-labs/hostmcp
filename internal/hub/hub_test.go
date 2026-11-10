@@ -532,3 +532,38 @@ func TestDeviceErrorsNameTheClientsDevices(t *testing.T) {
 		t.Fatalf("disconnected: %v", err)
 	}
 }
+
+// Canceling a call while its request frame is being written must not close
+// the node's connection, which would fail every other call on that node.
+func TestCancelDuringDispatchKeepsConnection(t *testing.T) {
+	h, srv, _ := fixture(t)
+	startAgent(t, srv.URL, &recordingExecutor{})
+	eventually(t, func() bool { return online(h) })
+	h.mu.RLock()
+	original := h.connections["dev1"]
+	h.mu.RUnlock()
+	args, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", 3<<20)})
+	for i := 0; i < 30; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _, _ = h.Call(ctx, "alice", "dev1", "echo", args) }()
+		time.Sleep(time.Duration(i*100) * time.Microsecond)
+		cancel()
+		<-done
+	}
+	time.Sleep(100 * time.Millisecond)
+	h.mu.RLock()
+	current := h.connections["dev1"]
+	h.mu.RUnlock()
+	if current != original {
+		t.Fatal("a canceled call closed the node connection")
+	}
+	select {
+	case <-original.done:
+		t.Fatal("a canceled call closed the node connection")
+	default:
+	}
+	if _, err := h.Call(context.Background(), "alice", "dev1", "echo", json.RawMessage(`{"text":"after"}`)); err != nil {
+		t.Fatal(err)
+	}
+}

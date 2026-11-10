@@ -828,7 +828,11 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		requestID = "not_dispatched"
 		return protocol.Result{}, fmt.Errorf("request canceled before dispatch; command was not dispatched: %w", err)
 	}
-	writeCtx, writeCancel := context.WithTimeout(callCtx, 10*time.Second)
+	// A websocket write whose context ends mid-frame closes the connection,
+	// which would drop every other call on this node. Once dispatch starts,
+	// finish the frame (still bounded by its own timeout) and honor the
+	// caller's cancellation while waiting for the reply instead.
+	writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(callCtx), 10*time.Second)
 	err = wsjson.Write(writeCtx, d.conn, protocol.Message{Type: "request", ID: id, Principal: principal, Tool: tool, Args: args})
 	writeCancel()
 	unknown := func(reason string) (protocol.Result, error) {
