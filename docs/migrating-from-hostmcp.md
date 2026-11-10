@@ -97,7 +97,8 @@ signed releases ([automatic updates](components-updates.md#automatic-updates)),
 as long as the service account can write the directory that holds the
 executable. A binary installed root-owned in `/usr/local/bin` stays manual; to
 change that, install it in a directory the service account owns, such as
-`~/.local/bin`, and point the service at it.
+`~/.rmc/bin` with mode `0755`, and point the service at it. On Ubuntu,
+`~/.local` is usually group-writable, which the updater also refuses.
 
 ## MCP client configuration
 

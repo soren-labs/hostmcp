@@ -117,7 +117,10 @@ The updater leaves the executable alone, and reports why in `rmc update status`
   directory above it is owned by another user or writable by others. Packages
   installed root-owned in `/usr/local/bin` are manual for this reason. To
   enable automatic updates for such a node, move its binary to a directory the
-  service account owns (for example `~/.local/bin`) and point the service at it.
+  service account owns (for example `~/.rmc/bin`, mode `0755`) and point the
+  service at it. On Ubuntu, `~/.local` is usually group-writable (the default
+  umask is `002`), so binaries under `~/.local/bin` are manual there too;
+  `rmc update status` shows the reason.
 
 ### What a check does
 
