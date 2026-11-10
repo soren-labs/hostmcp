@@ -191,7 +191,7 @@ func TestSDKProtocolVersionsAndScopes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(tools.Tools) != 2 {
+			if len(tools.Tools) != 3 { // echo, transfer_file and list_devices
 				t.Fatalf("tools=%d", len(tools.Tools))
 			}
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": "dev1", "text": "hello"}})

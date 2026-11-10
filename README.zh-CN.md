@@ -66,11 +66,13 @@ Hub 自己从不执行命令。要管理 Hub 所在的机器，也在那台机�
 | `exec_command` | 执行 Shell 命令，可选 PTY；长任务返回 session。可选 `output_mode`、`clean_ansi` |
 | `write_stdin` | 读取 session 的后续输出，发送输入或信号，调整 PTY 尺寸。可选 `wait_for_exit`、`output_mode`、`clean_ansi` |
 | `list_processes` / `terminate_process` | 列出、停止调用者自己的 session |
-| `read` | 读文件（文本行范围、用 `tail_lines` 读最后几行，或 base64）、列目录、查看元数据；普通文件同时返回 `sha256` |
+| `read` | 读文件（文本行范围、用 `tail_lines` 读最后几行，或从 `offset` 起读 base64）、列目录、查看元数据；普通文件同时返回 `sha256` |
 | `search` | 按 `glob` 查找文件，或用 RE2 / 字面量 `pattern` 搜索内容，可用 `context_lines` 带上下文；只读，跳过隐藏、依赖目录（如 `node_modules`）、二进制和大文件 |
-| `write_file` | 创建或覆盖文件（文本或 base64）；可选 `expected_sha256`，仅在内容未变时覆盖 |
+| `write_file` | 创建或覆盖文件（文本或 base64）；可选 `expected_sha256`，仅在内容未变时覆盖；`append` 配合 `expected_size` 分块追加 |
+| `move_path` | 在同一文件系统内重命名文件、目录或符号链接；除非 `overwrite`，否则不替换已有路径 |
 | `apply_patch` | 应用 `*** Begin Patch` 格式的新增/修改/删除/移动补丁 |
 | `view_image` | 把 PNG、JPEG、GIF 文件作为 MCP 图片内容返回 |
+| `transfer_file` | 经 Hub 把文件从一台设备复制到另一台，内容不经过对话；校验后原子安装，可凭 `transfer_id` 等待或取消（仅远程 Hub） |
 
 连接远程 Hub 时，每个设备工具都需要 `device` 参数，取值为 `list_devices` 返回的
 节点 ID。本地 `stdio` 模式直接作用于当前机器。

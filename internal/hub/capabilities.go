@@ -28,7 +28,7 @@ var legacyToolArgs = toolSetOf(map[string][]string{
 // postV1Tools names native tools added after legacyToolArgs was frozen. A Hub
 // never dispatches them to a node that did not advertise them. New argument
 // names on legacy tools need no entry: they are detected from the frozen table.
-var postV1Tools = map[string]bool{"search": true}
+var postV1Tools = map[string]bool{"search": true, "move_path": true}
 
 const (
 	maxAdvertisedTools = 128
