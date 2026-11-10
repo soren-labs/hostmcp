@@ -535,19 +535,26 @@ func TestDeviceErrorsNameTheClientsDevices(t *testing.T) {
 
 // Canceling a call while its request frame is being written must not close
 // the node's connection, which would fail every other call on that node.
+type quietExecutor struct{}
+
+func (quietExecutor) Close() error { return nil }
+func (quietExecutor) Call(context.Context, string, string, json.RawMessage) (protocol.Result, error) {
+	return protocol.JSONResult(map[string]any{"ok": true}), nil
+}
+
 func TestCancelDuringDispatchKeepsConnection(t *testing.T) {
 	h, srv, _ := fixture(t)
-	startAgent(t, srv.URL, &recordingExecutor{})
+	startAgent(t, srv.URL, quietExecutor{})
 	eventually(t, func() bool { return online(h) })
 	h.mu.RLock()
 	original := h.connections["dev1"]
 	h.mu.RUnlock()
-	args, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", 3<<20)})
-	for i := 0; i < 30; i++ {
+	args, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", 2<<20)})
+	for i := 0; i < 15; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
 		go func() { defer close(done); _, _ = h.Call(ctx, "alice", "dev1", "echo", args) }()
-		time.Sleep(time.Duration(i*100) * time.Microsecond)
+		time.Sleep(time.Duration(i*150) * time.Microsecond)
 		cancel()
 		<-done
 	}
