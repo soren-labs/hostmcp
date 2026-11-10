@@ -466,16 +466,16 @@ func (h *Hub) runTransfer(ctx context.Context, t *transfer, chunk int) {
 			err = errors.New("the Hub stopped during the transfer")
 		}
 	}
-	partial := ""
+	partial, cleanupErr := "", error(nil)
 	if err != nil {
-		partial = h.removeStaging(t)
+		partial, cleanupErr = h.removeStaging(t)
 	}
 	t.mu.Lock()
 	t.status, t.finished, t.partial = status, time.Now(), partial
 	if err != nil {
 		t.err = err.Error()
 		if partial != "" {
-			t.err += "; the staging file " + partial + " could not be removed"
+			t.err += fmt.Sprintf("; the staging file %s could not be removed (%v); delete it by hand", partial, cleanupErr)
 		}
 	}
 	size, written, elapsed := t.size, t.written, t.finished.Sub(t.started)
@@ -488,22 +488,22 @@ func (h *Hub) runTransfer(ctx context.Context, t *transfer, chunk int) {
 }
 
 // removeStaging deletes the staging file after a failure and returns its path
-// if it may still exist.
-func (h *Hub) removeStaging(t *transfer) string {
+// and the reason if it may still exist.
+func (h *Hub) removeStaging(t *transfer) (string, error) {
 	t.mu.Lock()
 	staged := t.staged
 	t.mu.Unlock()
 	if !staged {
-		return ""
+		return "", nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	patch := "*** Begin Patch\n*** Delete File: " + t.staging + "\n*** End Patch\n"
 	err := h.nodeCall(ctx, t, t.in.TargetDevice, "apply_patch", map[string]any{"patch": patch}, nil)
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
-		return t.staging
+		return t.staging, err
 	}
-	return ""
+	return "", nil
 }
 
 func (h *Hub) copyFile(ctx context.Context, t *transfer, chunk int) error {
