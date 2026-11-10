@@ -17,16 +17,19 @@ machine you enroll: your laptop, a home server, a fleet of VPSes.
 It is built for the case local MCP servers cannot cover. A chat in a web or
 mobile app cannot launch a process on your computer, and SSH-based MCP servers
 need a reachable port on every target. With RMC, each machine runs a small
-**Agent** that connects *out* to your **Hub**, so nothing needs a public IP or
+**node** that connects *out* to your **Hub**, so nothing needs a public IP or
 an open inbound port. The Hub authenticates clients and routes each tool call
 to the machine you pick.
 
-Each Agent acts as the OS account that runs it: real paths, your shell and
+Each node acts as the OS account that runs it: real paths, your shell and
 environment, normal Unix permissions. No containers, no directory allowlists,
 no Node.js or Electron on the devices.
 
 > RMC was called **HostMCP** up to v0.2.4. Existing installations keep
 > working; see [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
+>
+> The device component was called **Agent** before v0.3. `rmc agent …` still works;
+> the migration guide covers both renames.
 
 ## Features
 
@@ -53,12 +56,12 @@ no Node.js or Electron on the devices.
 flowchart LR
     C["MCP client<br/>Claude Code · Codex · ChatGPT"] -->|"HTTPS /mcp"| E["HTTPS proxy or<br/>Cloudflare Tunnel"]
     E --> H["RMC Hub<br/>auth + routing"]
-    A1["Agent on Ubuntu<br/>(user dev)"] -->|"outbound WebSocket"| H
-    A2["Agent on Ubuntu<br/>(root)"] -->|"outbound WebSocket"| H
-    A3["Agent on Mac<br/>(user alice)"] -->|"outbound WebSocket"| H
+    A1["Node on Ubuntu<br/>(user dev)"] -->|"outbound WebSocket"| H
+    A2["Node on Ubuntu<br/>(root)"] -->|"outbound WebSocket"| H
+    A3["Node on Mac<br/>(user alice)"] -->|"outbound WebSocket"| H
 ```
 
-The Hub never runs commands itself. To manage the Hub machine, run an Agent there
+The Hub never runs commands itself. To manage the Hub machine, run a node there
 too. Builds and other heavy work happen on the device you pick.
 
 ## Tools
@@ -102,8 +105,8 @@ export PATH="$HOME/.local/bin:$PATH"
 rmc version
 ```
 
-Use `--role hub` or `--role agent` to install the smaller single-role binaries
-(`rmc-hub`, `rmc-agent`). The default `rmc` binary contains every command.
+Use `--role hub` or `--role node` to install the smaller single-role binaries
+(`rmc-hub`, `rmc-node`). The default `rmc` binary contains every command.
 
 To build from source you need Go 1.25 or newer:
 
@@ -158,19 +161,19 @@ account it must run as:
 rmc device invite --id laptop --user alice --output laptop-invite.json
 ```
 
-**3. Enroll and run the Agent** (on the device, as that user). Copy the invite
+**3. Enroll and run the node** (on the device, as that user). Copy the invite
 file over a channel you trust; it is single-use and expires after 15 minutes:
 
 ```sh
-rmc agent enroll --invite laptop-invite.json
-rmc agent run
+rmc node enroll --invite laptop-invite.json
+rmc node run
 ```
 
 To skip the file, pipe the invitation straight into enrollment. `--output -`
 refuses to print to a terminal:
 
 ```sh
-ssh hub-host rmc device invite --id laptop --user alice --output - | rmc agent enroll --invite -
+ssh hub-host rmc device invite --id laptop --user alice --output - | rmc node enroll --invite -
 ```
 
 **4. Connect a client.** Give each AI client its own token, scoped to the nodes it
@@ -196,11 +199,11 @@ rmc call --url https://mcp.example.com/mcp \
   --token-file /absolute/path/claude.token --tool list_devices
 ```
 
-**5. Keep it running.** Install the Hub and each Agent as a service:
+**5. Keep it running.** Install the Hub and each node as a service:
 
 ```sh
 rmc service install --role hub   --config ~/.config/rmc/hub.json   --name rmc-hub
-rmc service install --role agent --config ~/.config/rmc/agent.json --name rmc-agent
+rmc service install --role node --config ~/.config/rmc/node.json --name rmc-node
 ```
 
 User services are the default. For boot-time system services, root nodes and
@@ -212,7 +215,7 @@ several accounts on one machine, see [account nodes](docs/account-nodes.md).
   authorized client can run anything and read or write anything that account can.
   There is no directory or command allowlist by design. Give each client only the
   nodes it needs, and use dedicated low-privilege accounts where that matters.
-- **Root is opt-in.** Agents never elevate. A root node is a separate Agent that an
+- **Root is opt-in.** Nodes never elevate. A root node is a separate node that an
   administrator deliberately runs as root.
 - **Separate credentials** for clients, device invitations and device connections.
   The Hub stores only SHA-256 hashes. Tokens can be scoped, rotated and revoked
@@ -237,8 +240,8 @@ Not supported today:
 - Windows, desktop control (mouse, keyboard, screenshots) and browser automation;
 - multi-tenant isolation between untrusted users of one Hub;
 - a built-in identity provider. OAuth uses your own provider or Cloudflare Access;
-- resuming process sessions after an Agent restart. Sessions survive network
-  reconnects, but not Agent restarts.
+- resuming process sessions after a node restart. Sessions survive network
+  reconnects, but not node restarts.
 
 ## Documentation
 
@@ -251,7 +254,7 @@ Not supported today:
 | Security model | [docs/security.md](docs/security.md) | 中文 |
 | External OAuth | [docs/oauth.md](docs/oauth.md) | English |
 | Cloudflare Access Managed OAuth | [docs/cloudflare-access.md](docs/cloudflare-access.md) | English |
-| Hub/Agent components, compatibility and updates | [docs/components-updates.md](docs/components-updates.md) | English |
+| Hub/node components, compatibility and updates | [docs/components-updates.md](docs/components-updates.md) | English |
 | Validation records | [docs/validation/](docs/validation/README.md) | 中文 / English |
 
 Translations of the Chinese documents are welcome.

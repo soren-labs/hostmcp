@@ -7,21 +7,37 @@ are generated from the matching section of this file.
 
 ## Unreleased
 
+### Renamed: Agent is now Node
+
+- The device-side component is now a **node**, because "agent" also names the AI
+  clients that drive RMC. Use `rmc node enroll`, `rmc node run` and `rmc node update`;
+  the `rmc agent …` commands still work.
+- The binary and release archive are now `rmc-node` and `rmc-node_V_OS_ARCH.tar.gz`.
+  `--role node` replaces `--role agent` in service install and `scripts/install.sh`;
+  `agent` is still accepted.
+- The default config is `~/.config/rmc/node.json`. An existing `agent.json` is used
+  when `node.json` is absent. The example service is `rmc-node`, with a
+  `deploy/launchd/io.rmc.node.plist` template; existing installed service names keep working.
+- `list_devices` reports the component as `node`.
+- Nothing changes on the wire: nodes still connect on `/agent/<id>` and send `agent`
+  as their hello component, so old and new versions interoperate.
+- The legacy `hostmcp-agent_…` release archives are no longer published. The v0.2.x
+  updater accepts only the `agent` component, so move those nodes to this release once
+  by hand. See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
+
 ### Renamed: HostMCP is now RMC (Remote Machine Control)
 
 - The project, repository, Go module and binaries are now `rmc`,
-  `rmc-hub` and `rmc-agent` (`github.com/soren-labs/rmc`). The README
+  `rmc-hub` and `rmc-node` (`github.com/soren-labs/rmc`). The README
   leads with what RMC is for: letting web, mobile, desktop and terminal AI
   clients work on your own machines through one self-hosted endpoint.
-- Nothing changes on the wire: Hub↔Agent wire version 1, MCP tools, arguments
-  and configuration formats are the same, and mixed RMC/HostMCP v0.2.x Hubs
-  and Agents interoperate.
+- Nothing changes on the wire: Hub↔node wire version 1, MCP tools, arguments
+  and configuration formats are the same, and RMC and HostMCP v0.2.x Hubs and
+  agents interoperate.
 - Existing installations keep working: the default config falls back to
   `~/.config/hostmcp/` when only that file exists, `HOSTMCP_TOKEN` is read when
   `RMC_TOKEN` is unset, and `service install`/`uninstall` accept existing
   `hostmcp-…` services with their original launchd labels and log directories.
-- Releases also publish `hostmcp-agent_V_OS_ARCH.tar.gz`, containing the RMC
-  Agent, so v0.2.x Agents can self-update across the rename.
 - See [Migrating from HostMCP](docs/migrating-from-hostmcp.md).
 
 ### Added
@@ -45,7 +61,7 @@ are generated from the matching section of this file.
   the error reports the current hash.
 - All new arguments are optional; omitting them keeps the previous behavior.
 - Piped enrollment: `rmc device invite --output -` writes the invitation to
-  stdout, and `rmc agent enroll --invite -` reads it from stdin. A device can be
+  stdout, and `rmc node enroll --invite -` reads it from stdin. A device can be
   added in one pipeline without leaving a credential file on either machine.
   `--output -` refuses to print to a terminal.
 - `rmc doctor --hub-config` runs Hub checks: configuration privacy and validity,
@@ -53,18 +69,18 @@ are generated from the matching section of this file.
   address and public endpoint. With `--hub-url`, it also checks `/healthz` and
   clock skew from the HTTP `Date` header. It exits non-zero if any check fails
   and prints no credentials. Plain `rmc doctor` is unchanged.
-- `--log-format json` for `hub serve` and `agent run` writes each log line as one
+- `--log-format json` for `hub serve` and `node run` writes each log line as one
   JSON object. The default stays text, and log call sites are unchanged.
 
 ### Changed
 
-- Agents advertise their native tools and argument names in an optional
+- Nodes advertise their native tools and argument names in an optional
   `tool_args` hello field. Before dispatch, a Hub refuses a native tool or
-  argument that the target Agent does not support, with an "upgrade that Agent;
-  command was not dispatched" error. Agents that do not advertise (v0.2.4 and
+  argument that the target node does not support, with an "upgrade that node.
+  Command was not dispatched" error. Nodes that do not advertise (v0.2.4 and
   older) are checked against a fixed table. Wire version stays 1, and older
   Hubs ignore the field. Using the new tools or arguments through a new Hub
-  requires upgrading that Agent.
+  requires upgrading that node.
 
 ### Performance
 

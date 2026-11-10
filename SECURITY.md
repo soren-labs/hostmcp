@@ -1,7 +1,7 @@
 # Security policy
 
 RMC gives MCP clients the native authority of the OS accounts that run its
-Agents. Security bugs can therefore expose remote command execution, so please
+nodes. Security bugs can therefore expose remote command execution, so please
 report them privately.
 
 ## Supported versions
@@ -21,7 +21,7 @@ Use GitHub private vulnerability reporting:
 
 Please include:
 
-- the RMC version (`rmc version`) and component (hub, agent or all);
+- the RMC version (`rmc version`) and component (hub, node or all);
 - the operating system, deployment shape (direct HTTPS, Cloudflare Tunnel,
   Docker Hub, stdio) and authentication mode (bearer, OAuth, Cloudflare Access);
 - minimal reproduction steps.
@@ -37,13 +37,14 @@ with the reporter.
 
 In scope — for example:
 
-- authentication bypass on `/mcp`, `/agent/` or `/enroll`;
+- authentication bypass on `/mcp`, `/agent/` (the node connection path, kept under its
+  pre-v0.3 name) or `/enroll`;
 - a client reaching a node outside its granted device list, or another
   principal's process sessions;
 - the Hub executing commands or reading files itself;
 - invitation, device or client credentials written to logs, URLs or
   world-readable files;
-- Agent tools acting with more privilege than the Agent's OS account;
+- node tools acting with more privilege than the node's OS account;
 - installer, updater or release artifact integrity problems.
 
 Out of scope — these are the documented design:

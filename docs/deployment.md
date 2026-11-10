@@ -4,27 +4,27 @@
 
 | 环境 | 推荐组合 | 外网入口 |
 | --- | --- | --- |
-| 小 VPS | Hub 原生服务或 Hub 容器；各设备原生 Agent | Caddy HTTPS 或 Cloudflare named Tunnel |
-| 家庭 Ubuntu | Hub 用户服务与 cloudflared；各设备原生 Agent | Cloudflare named Tunnel |
-| 家庭 Mac | Hub LaunchAgent 与 cloudflared；各设备原生 Agent | Cloudflare named Tunnel |
+| 小 VPS | Hub 原生服务或 Hub 容器；各设备原生节点 | Caddy HTTPS 或 Cloudflare named Tunnel |
+| 家庭 Ubuntu | Hub 用户服务与 cloudflared；各设备原生节点 | Cloudflare named Tunnel |
+| 家庭 Mac | Hub LaunchAgent 与 cloudflared；各设备原生节点 | Cloudflare named Tunnel |
 | 单机使用 | rmc stdio | 不需要公开入口 |
 
-所有 device Agent 都主动连接 Hub。设备无需公网 IP、SSH server 或路由器端口
+所有设备节点都主动连接 Hub。设备无需公网 IP、SSH server 或路由器端口
 转发。Hub 的公开地址仍必须能从各设备及 MCP 客户端访问。
 
 首版的默认目标是一个所有者管理自己的设备。完整安装步骤由 README 的 Hub
-init、device invite、agent enroll/run 组成，本页补充网络与常驻服务细节。
+init、device invite、node enroll/run 组成，本页补充网络与常驻服务细节。
 
 ## 原生安装
 
 从源码构建或安装真实存在的 Release 后，将 rmc 放到用户可写的目录，例如
-~/.local/bin。Hub 与 Agent 使用独立的配置文件。推荐布局：
+~/.local/bin。Hub 与节点使用独立的配置文件。推荐布局：
 
 | 文件 | 用途 |
 | --- | --- |
 | ~/.config/rmc/hub.json | Hub 配置与授权状态 |
 | ~/.config/rmc/owner.token | 所有者 MCP token |
-| ~/.config/rmc/agent.json | 本机 Agent 的连接配置 |
+| ~/.config/rmc/node.json | 本机节点的连接配置 |
 | 临时目录中的 invite.json | 一次性设备邀请，使用后删除副本 |
 
 目录设置 0700，秘密文件设置 0600。不要把部署状态放进 Git checkout。通过
@@ -75,8 +75,8 @@ rmc hub configure --config "$HOME/.config/rmc/hub.json" \
 按照控制台给出的 service 命令配置。
 
 不要将 Cloudflare 的管理 API token 或 tunnel credential 当成 RMC bearer。
-首版的默认部署是 named Tunnel 加 RMC 自身的 bearer 验证。内置的 agent、
-connect 和 agent enroll 尚不支持配置 Cloudflare Access 所需的服务凭证 headers。
+首版的默认部署是 named Tunnel 加 RMC 自身的 bearer 验证。内置的 `node run`、
+`connect` 和 `node enroll` 尚不支持配置 Cloudflare Access 所需的服务凭证 headers。
 因此不要直接在整个 RMC 域名上开启要求 Access 服务凭证的策略，否则设备
 加入、WebSocket 连接和内置客户端都会被拦截。某个外部 MCP 客户端能够添加
 Access headers，不代表设备到 Hub 的整条链路已经兼容。邮箱登录页同样无法
@@ -105,7 +105,7 @@ DNS、防火墙或占用中的反向代理配置。
 
 WebSocket Upgrade 必须能正常转发；不能把设备连接路径当成普通静态网页缓存。
 大命令要通过 RMC 的 session 查询输出，避免一个 HTTP 请求一直等到编译
-结束。Cloudflare 边缘更新或网络波动都可能断开 WebSocket，Agent 需要重连。
+结束。Cloudflare 边缘更新或网络波动都可能断开 WebSocket，节点需要重连。
 连接恢复不保证重新派发一条命令安全，失败后先检查 session 和实际工作状态。
 
 ## Linux 用户服务
@@ -115,8 +115,8 @@ WebSocket Upgrade 必须能正常转发；不能把设备连接路径当成普�
 ```sh
 rmc service install --role hub \
   --config "$HOME/.config/rmc/hub.json" --name rmc-hub
-rmc service install --role agent \
-  --config "$HOME/.config/rmc/agent.json" --name rmc-agent
+rmc service install --role node \
+  --config "$HOME/.config/rmc/node.json" --name rmc-node
 ```
 
 只安装这台机器需要的角色。Hub 不会自动成为可执行设备。
@@ -126,7 +126,7 @@ rmc service install --role agent \
 ```sh
 systemctl --user status rmc-hub
 journalctl --user -u rmc-hub -n 100
-systemctl --user restart rmc-agent
+systemctl --user restart rmc-node
 ```
 
 如果需要用户注销后仍运行、并在开机时启动用户 manager，管理员可为该用户启用
@@ -135,7 +135,7 @@ loginctl enable-linger。是否已启用可以用 loginctl show-user USER -p Lin
 user bus 时，先在该用户的正常登录环境配置，或由管理员部署指定 User= 的系统
 unit。安装器不会更改 sudoers。
 
-Agent unit 不添加限制其用户原有文件能力的 ProtectHome/动态用户策略，也不
+节点 unit 不添加限制其用户原有文件能力的 ProtectHome/动态用户策略，也不
 额外禁止用户本来可用的提权路径。Hub 可以采用更严格的服务隔离，因为它不
 执行设备命令。
 
@@ -145,7 +145,7 @@ Agent unit 不添加限制其用户原有文件能力的 ProtectHome/动态用�
 [launchd 模板](../deploy/launchd/)。plist 中的路径必须是真实绝对路径；launchd
 不会替换其中的 $HOME 或波浪号。使用模板前创建日志目录并替换 /Users/YOU。
 
-CLI 生成的 label 为 com.rmc.rmc-hub 或 com.rmc.rmc-agent
+CLI 生成的 label 为 com.rmc.rmc-hub 或 com.rmc.rmc-node
 （自定义 --name 时替换最后一段）。可使用 launchctl print gui/UID/LABEL
 检查状态。仓库中的 io.rmc.* plist 是手工安装示例，label 与 CLI 生成物不同；
 手工安装的服务应使用 launchctl bootout 和删除该 plist 的方式移除。
@@ -153,7 +153,7 @@ CLI 生成的 label 为 com.rmc.rmc-hub 或 com.rmc.rmc-agent
 LaunchAgent 与用户登录会话关联。不要将它描述成在 FileVault 尚未解锁、用户
 未登录时仍保证可用的系统 daemon。设备睡眠、关机或断网时，Hub 应显示离线。
 
-macOS 文件访问仍受 TCC 等机制控制。Agent 运行于当前 UID 不能自动获得完整
+macOS 文件访问仍受 TCC 等机制控制。节点运行于当前 UID 不能自动获得完整
 磁盘访问、屏幕录制或 Accessibility；首版也没有键鼠或屏幕捕获工具。需要的
 文件访问授权由用户通过系统设置授予对应进程，系统拒绝应原样返回。
 
@@ -165,10 +165,10 @@ v0.2.1 可由管理员安装 systemd system service 或 macOS LaunchDaemon。执
 
 ```sh
 sudo /usr/local/bin/rmc service install --system --user worker \
-  --role agent --config /home/worker/.config/rmc/agent.json \
+  --role node --config /home/worker/.config/rmc/node.json \
   --name rmc-worker
 sudo /usr/local/bin/rmc service install --system --user root \
-  --role agent --config /var/lib/rmc/root.json --name rmc-root
+  --role node --config /var/lib/rmc/root.json --name rmc-root
 ```
 
 macOS 将示例中的普通用户名称和主目录换成实际账户；系统服务不要使用仅该用户
@@ -190,12 +190,12 @@ sudo /usr/local/bin/rmc service uninstall --system --name rmc-root
 
 macOS 系统服务日志位于 `/Library/Logs/RMC/NAME/service.log`，用户服务日志
 位于 `~/Library/Logs/RMC/NAME.log`。卸载可重复执行，保留配置和日志；它不
-代替在 Hub 上撤销设备凭证。`hub serve` 和 `agent run` 可加 `--log-format json`，
+代替在 Hub 上撤销设备凭证。`hub serve` 和 `node run` 可加 `--log-format json`，
 每行输出一个 JSON 对象，便于日志系统解析；默认仍为文本。
 
 ## 容器部署 Hub
 
-容器仅用于 Hub。设备 Agent 在各自宿主系统中原生运行，才能看到该用户实际的
+容器仅用于 Hub。设备节点在各自宿主系统中原生运行，才能看到该用户实际的
 文件、工具与进程环境。
 
 镜像构建需要 BuildKit（安装 `docker buildx` 插件；Docker Desktop 已自带）。旧版
@@ -226,17 +226,17 @@ docker compose -f deploy/compose.yml down
 
 ## 独立组件、OAuth 与可选更新
 
-新源码的 `rmc-hub` 与 `rmc-agent` 有独立产物和安装路径；兼容二进制
+新源码的 `rmc-hub` 与 `rmc-node` 有独立产物和安装路径；兼容二进制
 `rmc` 保留。Hub 认证、元数据和路由升级保持 wire v1 时，无需重新部署每个
-Agent。新原生工具或执行器修复仍需要 Agent 更新。版本合同、健康字段、批次
+节点。新原生工具或执行器修复仍需要节点更新。版本合同、健康字段、批次
 升级、离线归档校验、回滚与 systemd/launchd 重启命令见
 [组件兼容与更新](components-updates.md)。该文档区分已运行版本与磁盘上的新文件。
 
 远程 OAuth 通过外部 provider 配置，详细步骤见 [OAuth](oauth.md)。只重启 Hub；
-Agent 不接受 OAuth 客户端凭证，也无需重新注册。反向代理必须公开受保护资源
+节点不接受 OAuth 客户端凭证，也无需重新注册。反向代理必须公开受保护资源
 元数据路径并透传 `/mcp` 的 challenge 与 Authorization header。
 
-可选 Agent 更新通过每节点本地策略启用，固定 stable 版本和平台归档 SHA-256，
+可选节点更新通过每节点本地策略启用，固定 stable 版本和平台归档 SHA-256，
 不接受 Hub URL 下发、不默认更新 root、不提升权限或自动重启。可由用户 timer
 定时调用，再在维护窗口重启并检查在线版本；没有物理开机或故障硬件修复功能。
 
@@ -244,12 +244,12 @@ Agent 不接受 OAuth 客户端凭证，也无需重新注册。反向代理必�
 
 先备份受保护的配置，再安装目标版本二进制，重启该角色服务并执行 list_devices
 和 device_info 验证。按[兼容合同](components-updates.md)与 release notes 升级，不假定任意
-未来 wire/config 版本都兼容。活动终端可能受到 Agent 重启影响，应先结束或另行管理重要任务。
+未来 wire/config 版本都兼容。活动终端可能受到节点重启影响，应先结束或另行管理重要任务。
 
 撤销设备和 token 的命令见 [security.md](security.md)。卸载用户服务：
 
 ```sh
-rmc service uninstall --name rmc-agent
+rmc service uninstall --name rmc-node
 rmc service uninstall --name rmc-hub
 ```
 

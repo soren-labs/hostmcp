@@ -69,11 +69,11 @@ rmc-hub hub configure --config /absolute/path/hub.json --oauth-file oauth.json
 The compatibility binary `rmc` supports the same commands. This writes the
 optional `oauth` object into the existing format-v1 Hub configuration. Existing
 client hashes, node credentials, invitations and node bindings are retained. Node
-Agent configuration does not change. Restart only the Hub after enabling OAuth or
+configuration does not change. Restart only the Hub after enabling OAuth or
 changing issuer, public URL or required scopes. Discovery settings and public
 metadata are fixed for a running Hub. Settings changes reject OAuth requests until
 restart; subject/node mapping changes and removals take effect on new requests and
-at tool dispatch without restarting agents.
+at tool dispatch without restarting nodes.
 
 Each subject must be explicitly mapped to named node IDs; `*` is forbidden in OAuth
 mappings. A token with `owner`, `admin`, or `*` scope cannot grant any nodes. An OAuth
@@ -101,7 +101,7 @@ tools; query-string tokens and duplicate Authorization headers are rejected.
 Metadata alone is public. Existing host/origin allowlists apply to metadata too;
 explicitly allow a browser client's Origin if its metadata fetch requires that.
 Forward Authorization unchanged; do not enable authentication-page redirects or
-proxy caching on these paths. `/agent/` and `/enroll` retain their separate device
+proxy caching on these paths. `/agent/` (the node connection path, kept from before v0.3) and `/enroll` retain their separate device
 and invitation credentials. OAuth tokens cannot enroll or authenticate a node.
 
 ## Client setup and fallback
@@ -119,12 +119,12 @@ not establish product-specific OAuth compatibility. Clients unable to complete t
 provider's flow may use a pre-issued legacy client bearer or the existing local
 `rmc connect --token-file ...` stdio bridge. That CLI does not perform browser
 login or refresh OAuth tokens. STDIO uses local process/ENV/file credentials and
-has no OAuth transport handshake. Never use an Agent credential for MCP access.
+has no OAuth transport handshake. Never use a node credential for MCP access.
 
 Disable OAuth with `rmc-hub hub configure --config ... --disable-oauth` and
 restart the Hub. This leaves legacy clients intact. To roll back to an older Hub
 binary that rejects unknown config fields, first remove the optional OAuth block
-with this version's CLI. Agents need no upgrade or re-enrollment for either action.
+with this version's CLI. Nodes need no upgrade or re-enrollment for either action.
 
 ## Isolated local checks
 
@@ -150,12 +150,12 @@ line or in URLs. For deterministic tests requiring no external issuer or listene
 
 ```sh
 go test ./internal/oauth ./internal/hub -run '^TestOAuth' -count=1
-go test ./internal/hub ./internal/agent -run '^TestCompatibility' -count=1
+go test ./internal/hub ./internal/node -run '^TestCompatibility' -count=1
 ```
 
 These tests sign ephemeral JWTs, drive the official MCP client through in-memory
 HTTP, and test websocket wire-v1 traffic over `net.Pipe`. They include bad
 signatures, algorithms, issuer/audience, expired/missing expiry, key rotation,
 failed discovery, metadata challenges, legacy bearer, explicit node grants,
-Origin checks, agent-channel rejection and mixed-generation handshakes. They do
+Origin checks, node-channel rejection and mixed-generation handshakes. They do
 not contact a deployed Hub, an installed application or a real identity account.

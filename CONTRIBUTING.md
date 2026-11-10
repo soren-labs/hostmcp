@@ -18,7 +18,7 @@ make vuln     # govulncheck
 `make check` runs the same checks as CI. The individual commands are in the
 `Makefile` if you prefer to run them directly.
 
-Use isolated temporary directories, test-only credentials, and dedicated Hub/Agent
+Use isolated temporary directories, test-only credentials, and dedicated Hub/node
 processes. Never connect tests to a production Hub or read real user
 data. Keep production configuration, real tokens and device details out of
 fixtures and logs.
@@ -26,7 +26,7 @@ fixtures and logs.
 ## Pull requests
 
 - Open an issue first for larger changes, especially anything that touches the
-  permission model, authentication or the Hub↔Agent wire protocol.
+  permission model, authentication or the Hub↔node wire protocol.
 - Keep each pull request focused. Fill in the template, including the platforms
   you actually tested on.
 - Add user-visible changes to the `Unreleased` section of `CHANGELOG.md`.
@@ -99,15 +99,15 @@ docs/architecture.md.
 The release workflow pins Go 1.27.3 for validation and archive builds. Runtime CI
 uses the minimum Go version declared in go.mod to check baseline compatibility.
 
-The packaging script builds four archives and a SHA256SUMS file without publishing:
+The packaging script builds the archives for four targets and a SHA256SUMS file without publishing:
 
 ```sh
 bash scripts/release.sh v0.3.0
 ```
 
-Archive names are rmc_VERSION_OS_ARCH.tar.gz, rmc-hub_… and rmc-agent_… for
-linux/darwin and amd64/arm64, plus legacy hostmcp-agent_… archives for v0.2.x
-self-updaters.
+Archive names are rmc_VERSION_OS_ARCH.tar.gz, rmc-hub_… and rmc-node_… for
+linux/darwin and amd64/arm64. The legacy hostmcp-agent_… archives that v0.2.x
+self-updaters used are no longer published.
 Each contains the binary, LICENSE and dependency license notices. The
 installer verifies the selected archive checksum and writes to a user-owned prefix.
 It can be tested without a network download:

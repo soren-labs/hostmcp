@@ -1,38 +1,38 @@
-# Hub and Agent lifecycle
+# Hub and node lifecycle
 
 RMC ships `rmc` as the all-in-one compatibility binary plus separate `rmc-hub`
-and `rmc-agent` artifacts (introduced in HostMCP v0.2.2 as `hostmcp`,
+and `rmc-node` artifacts (`rmc-agent` before v0.3; introduced in HostMCP v0.2.2 as `hostmcp`,
 `hostmcp-hub` and `hostmcp-agent`). All variants share Go source and may share a
 release tag; each has a separate archive, destination path and deployment lifecycle.
 
 | Artifact | Commands | Upgrade when |
 | --- | --- | --- |
 | `rmc-hub` | `hub`, `device`, `token`, `connect`, `call`, service/diagnostics | Auth, MCP presentation, routing, metadata or Hub policy changes |
-| `rmc-agent` | `agent enroll/run/update`, service/diagnostics | Native executor fixes/features or deliberate wire changes |
+| `rmc-node` | `node enroll/run/update` (`agent` is a legacy alias), service/diagnostics | Native executor fixes/features or deliberate wire changes |
 | `rmc` | All existing commands, including local `stdio` | Compatibility installations, bridges and local use |
 
 Role-specific binaries reject unsupported commands before reading configs or
 starting services. `service install --role` must match the binary. Service uninstall
 remains a local management operation under the calling OS account. Roles are CLI
-restrictions, not distinct OS sandboxes. They do not change the Agent user's normal
+restrictions, not distinct OS sandboxes. They do not change the node user's normal
 filesystem, process, sudo or macOS privacy permissions.
 
 Build release archives with `bash scripts/release.sh vX.Y.Z`: three variants times
 four targets (Linux/macOS, amd64/arm64), with SHA256SUMS and license notices. No
 publishing occurs. Install a verified release with `scripts/install.sh --version
-vX.Y.Z --role hub` or `--role agent`; omit `--role` for the original binary. For local
+vX.Y.Z --role hub` or `--role node` (`agent` is still accepted); omit `--role` for the original binary. For local
 archives add `--archive ... --checksums ...`. Service generation uses the executable
-actually invoked; new agent services can use:
+actually invoked; new node services can use:
 
 ```sh
-/absolute/path/rmc-agent service install --role agent \
-  --config /absolute/path/agent.json --name rmc-agent
+/absolute/path/rmc-node service install --role node \
+  --config /absolute/path/node.json --name rmc-node
 ```
 
-Existing services using `rmc agent run` keep working. Migrating to a new path
+Existing services using `rmc agent run` (the legacy form of `rmc node run`) keep working. Migrating to a new path
 requires updating/reinstalling that service deliberately, preserving its config,
 name and OS account. An existing `rmc` service does not start using a new
-`rmc-agent` file automatically. Agent updates can end managed process sessions
+`rmc-node` file automatically. Node updates can end managed process sessions
 when the service restarts; schedule maintenance around important work.
 
 ## Compatibility contract
@@ -41,44 +41,44 @@ Config format, private wire version and component build version are separate:
 
 - Config format remains **1**. Existing fields/tokens/nodes remain valid. Optional
   Hub OAuth/Cloudflare Access fields require a supporting Hub; older Hub binaries require removing
-  that optional policy before rollback. No new Agent config fields are required.
+  that optional policy before rollback. No new node config fields are required.
 - Wire version remains **1**, independently of the release tag. Both sides require
   exactly version 1 in hello/welcome. A mismatch closes the connection before any
-  tool request. A Hub-only upgrade never requires Agent changes when this contract
+  tool request. A Hub-only upgrade never requires node changes when this contract
   and the requested native operations remain unchanged.
 - JSON object fields added to v1 must be optional; missing fields have old behavior
   and unknown fields are ignored. Existing request/result meanings, tool names,
   input fields, principal size limit and replay/ownership rules cannot be changed
   incompatibly within v1. New required messages/operations need explicit negotiation
   or a new wire version, plus mixed-version tests before release. Do not silently
-  dispatch new native features to older Agents; unsupported native operations
-  require an Agent upgrade. There is no arbitrary remote code/plugin delivery.
+  dispatch new native features to older nodes; unsupported native operations
+  require a node upgrade. There is no arbitrary remote code/plugin delivery.
 - Build versions are diagnostic, not compatibility gates. `version` reports the
-  component, build/commit, platform, wire and config versions. Agent hello reports
+  component, build/commit, platform, wire and config versions. node hello reports
   its build version; welcome optionally reports the Hub build version/component.
   Old peers ignore these new fields. Release builds inject the same version into
   CLI, MCP server, health endpoint and device inventory. Unstamped source builds
   report the next development version with a `-dev` suffix (for example
   `0.2.4-dev` after v0.2.3). The v0.2.3 Cloudflare Access identity mode is
-  [Hub-only](cloudflare-access.md); existing Agents require no replacement.
+  [Hub-only](cloudflare-access.md); existing nodes require no replacement.
 
-An Agent may send an optional `tool_args` map in hello, listing each native tool
+A node may send an optional `tool_args` map in hello, listing each native tool
 it runs and that tool's top-level argument names. Before dispatch, a Hub refuses
-a native tool or argument the target Agent does not support, with an "upgrade
-that Agent" error, so the command is not sent. Agents without the field (v0.2.4
+a native tool or argument the target node does not support, with an "upgrade
+that node" error, so the command is not sent. Nodes without the field (v0.2.4
 and older) are checked against a fixed table of their tools and arguments.
 Tools and arguments the Hub does not know are passed through unchanged. Wire
 version stays 1, and older Hubs ignore the field.
 
 `TestCompatibilityLegacyAgentWithOAuthHub` sends the old v0.2.1 hello field set to
 the new Hub and dispatches an OAuth-authorized tool over wire v1. The reverse test
-sends new Agent traffic to a minimal legacy-v1 Hub fixture. These are in-process
+sends new node traffic to a minimal legacy-v1 Hub fixture. These are in-process
 protocol tests, not tests of deployed v0.2.1 binaries or external clients.
 
 ## Optional pinned node updates
 
 Updates are disabled unless a local operator provisions a private policy and runs
-or schedules `agent update`. The agent channel has no update API or update URL message from the Hub.
+or schedules `node update`. The node channel has no update API or update URL message from the Hub.
 This constrains the updater mechanism: a client with native execution authority
 on a node can still edit its own files or run software as that OS account; this
 is not an additional OS permission boundary. The updater accepts only the fixed HTTPS GitHub release source
@@ -89,7 +89,7 @@ user; policy files are private. The updater refuses root entirely. Root nodes an
 root-owned executables require a separate, deliberate administrator-managed upgrade.
 It does not use sudo or change service identities.
 
-Example **template**, replacing the version/checksum/path with an available Agent
+Example **template**, replacing the version/checksum/path with an available node
 release and its digest for this OS/architecture:
 
 ```json
@@ -98,14 +98,14 @@ release and its digest for this OS/architecture:
   "enabled": true,
   "channel": "stable",
   "target_version": "0.2.2",
-  "sha256": "REPLACE_WITH_64_HEX_DIGITS_FOR_THE_AGENT_ARCHIVE",
-  "binary": "/home/worker/.local/bin/rmc-agent"
+  "sha256": "REPLACE_WITH_64_HEX_DIGITS_FOR_THE_NODE_ARCHIVE",
+  "binary": "/home/worker/.local/bin/rmc-node"
 }
 ```
 
 Place this in a `0600` file in the operator's private configuration directory. Use
 the actual, absolute path without symlinked parent directories (resolve `/var` to
-`/private/var` on macOS if necessary). The target must already be an Agent-only
+`/private/var` on macOS if necessary). The target must already be a node-only
 binary reporting a stable build version. Migrate legacy combined binaries manually
 once; this updater will not overwrite a Hub or compatibility binary. Do not deploy
 user-writable executables as root services.
@@ -119,17 +119,17 @@ key rotation for signed release manifests. The local checksum pin is the content
 trust anchor; protecting its distribution is the operator's responsibility.
 
 ```sh
-rmc-agent agent update --policy /absolute/path/agent-update.json
+rmc-node node update --policy /absolute/path/node-update.json
 # Or transfer a reviewed archive without giving the node network access:
-rmc-agent agent update --policy /absolute/path/agent-update.json \
-  --archive /absolute/path/rmc-agent_X.Y.Z_linux_amd64.tar.gz
+rmc-node node update --policy /absolute/path/node-update.json \
+  --archive /absolute/path/rmc-node_X.Y.Z_linux_amd64.tar.gz
 ```
 
 The updater locks the target, refuses automatic downgrade, bounds download and
 extraction sizes, verifies SHA-256 **before extraction/execution**, extracts only
 the expected regular executable (rejecting archive links and unsafe paths), stages
 on the same filesystem, and executes its `version` command with bounded output and
-a deadline. The candidate must match the pinned version, agent role, platform and
+a deadline. The candidate must match the pinned version, node role, platform and
 wire v1. It syncs staging, preserves the original executable at `.previous`, then
 atomically renames the candidate. A directory-sync error after rename explicitly
 reports that replacement occurred; inspect version before deciding next steps.
@@ -143,7 +143,7 @@ or automatically roll back a process that fails after restart. Plan an explicit
 restart and check the running version/online state. To restore the retained binary:
 
 ```sh
-rmc-agent agent update --policy /absolute/path/agent-update.json --rollback
+rmc-node node update --policy /absolute/path/node-update.json --rollback
 # Restart the same service, then verify list_devices and device_info.
 ```
 
@@ -157,7 +157,7 @@ original remains active; inspect versions before clearing that backup.
 
 For many nodes, distribute one reviewed desired version with per-platform digest
 pins using your existing configuration management. Roll out to a canary, verify
-online version and a harmless identity call, then expand in batches. No Hub/Agent
+online version and a harmless identity call, then expand in batches. No Hub/node
 release-tag equality is required. For optional periodic replacement, a user-level
 systemd timer or launchd job can run the above fixed-policy command at a chosen
 interval; it is a no-op without a download once the installed version matches.
@@ -168,7 +168,7 @@ pinned updater, not an automatic latest-version discovery or fleet orchestrator.
 
 Unauthenticated `/healthz` reports only Hub liveness, build component/version and
 wire version. It does not reveal nodes or prove they are online. Authenticated
-`list_devices` returns only allowed nodes with running Agent version, component,
+`list_devices` returns only allowed nodes with running node version, component,
 observed wire version, `online`, `connected_at`, `last_seen` (successful connection
 or heartbeat), and `disconnected_at`. Heartbeats run every 20 seconds with an
 8-second timeout; an unresponsive connection is normally detected by the next
@@ -176,7 +176,7 @@ heartbeat plus timeout. Known timestamps are in memory and reset on Hub restart;
 never-seen nodes have no timestamps. A successful ping does not attest that an OS
 shell, disk or external network is healthy. Use `device_info` for an active check.
 
-| Service | Status/logs | Planned Agent restart |
+| Service | Status/logs | Planned node restart |
 | --- | --- | --- |
 | Linux user | `systemctl --user status NAME`; `journalctl --user -u NAME` | `systemctl --user restart NAME` |
 | Linux system | `systemctl status NAME`; `journalctl -u NAME` | Administrator runs `systemctl restart NAME` |
@@ -184,9 +184,9 @@ shell, disk or external network is healthy. Use `device_info` for an active chec
 | macOS system | `launchctl print system/com.rmc.NAME`; configured log file | Administrator runs `launchctl kickstart -k system/com.rmc.NAME` |
 
 Use the actual service label; manual templates may have different labels. A Hub
-restart reconnects Agents; do not replay uncertain side effects. A sleeping,
+restart reconnects nodes; do not replay uncertain side effects. A sleeping,
 powered-off, physically disconnected or failed machine cannot be repaired by this
-software. Diagnose power, network and OS startup separately; user agents also
+software. Diagnose power, network and OS startup separately; user services also
 require the appropriate user manager/login and macOS FileVault/TCC state.
 
 ## Local verification
@@ -197,7 +197,7 @@ bash scripts/release.sh v0.3.0 ./build/release-smoke
 python3 scripts/packaging-smoke.py --dist ./build/release-smoke --version v0.3.0
 ```
 
-The packaging test builds a temporary older native Agent, installs each native
+The packaging test builds a temporary older native node, installs each native
 role, rejects unsupported commands and corrupted archives, performs a pinned
 offline upgrade and rollback, and checks all 12 archive digests/notices. Tests use
 temporary files and no service manager. Cross-compilation verifies buildability;
