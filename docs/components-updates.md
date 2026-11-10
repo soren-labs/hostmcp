@@ -32,8 +32,8 @@ actually invoked; new node services can use:
 Existing services using `rmc agent run` (the legacy form of `rmc node run`) keep working. Migrating to a new path
 requires updating/reinstalling that service deliberately, preserving its config,
 name and OS account. An existing `rmc` service does not start using a new
-`rmc-node` file automatically. Node updates can end managed process sessions
-when the service restarts; schedule maintenance around important work.
+`rmc-node` file automatically. A node restart ends its managed process
+sessions; [automatic updates](#automatic-updates) wait until the node is idle.
 
 ## Compatibility contract
 
@@ -75,94 +75,156 @@ the new Hub and dispatches an OAuth-authorized tool over wire v1. The reverse te
 sends new node traffic to a minimal legacy-v1 Hub fixture. These are in-process
 protocol tests, not tests of deployed v0.2.1 binaries or external clients.
 
-## Optional pinned node updates
+## Automatic updates
 
-Updates are disabled unless a local operator provisions a private policy and runs
-or schedules `node update`. The node channel has no update API or update URL message from the Hub.
-This constrains the updater mechanism: a client with native execution authority
-on a node can still edit its own files or run software as that OS account; this
-is not an additional OS permission boundary. The updater accepts only the fixed HTTPS GitHub release source
-`soren-labs/rmc`, exact stable versions, this node's OS/architecture and a
-locally pinned SHA-256. There is no `latest`, prerelease channel, alternate repository
-or custom URL field. Policy files and executables must be owned by the calling
-user; policy files are private. The updater refuses root entirely. Root nodes and
-root-owned executables require a separate, deliberate administrator-managed upgrade.
-It does not use sudo or change service identities.
+From v0.3, a running Hub (`hub serve`) or node (`node run`) keeps itself on the
+newest signed release. This applies to `rmc-hub`, `rmc-node` and the combined
+`rmc` binary; each installs its own archive.
 
-Example **template**, replacing the version/checksum/path with an available node
-release and its digest for this OS/architecture:
+**On by default, stable channel.** Settings live in `updates.json` beside the
+Hub or node configuration, shared by the services configured in that directory.
+A missing file means "on, stable".
+
+```sh
+rmc update status  [--config FILE]   # settings, mode, last check, rollbacks
+rmc update disable [--config FILE]   # turn automatic updates off
+rmc update enable  [--config FILE]
+rmc update channel stable|canary [--config FILE]
+rmc update check   [--config FILE]   # look for a release now; installs nothing
+```
+
+`RMC_AUTO_UPDATE=off` in the service environment also turns updates off. The
+container image sets it: containers are updated by replacing the image.
+Changes take effect at the service's next check, without a restart.
+
+`list_devices` shows each node's `auto_update` mode as of its last start:
+
+| Mode | Meaning |
+| --- | --- |
+| `stable` / `canary` | Automatic updates on, from that channel |
+| `off` | Turned off with `rmc update disable` or `RMC_AUTO_UPDATE` |
+| `manual` | This installation cannot replace itself (see below) |
+
+### When an installation is manual
+
+The updater leaves the executable alone, and reports why in `rmc update status`
+(`manual_reason`) and in the service log, when:
+
+- it is a development build (a version such as `0.3.0-dev`);
+- the service runs as root. Root installations are always updated by an
+  administrator;
+- the executable's directory is not writable by the service account, or any
+  directory above it is owned by another user or writable by others. Packages
+  installed root-owned in `/usr/local/bin` are manual for this reason. To
+  enable automatic updates for such a node, move its binary to a directory the
+  service account owns (for example `~/.local/bin`) and point the service at it.
+
+### What a check does
+
+A service checks 2–9 minutes after it starts, then about hourly (±10 minutes).
+Each check:
+
+1. reads the release list from `api.github.com` for `soren-labs/rmc`. Downloads
+   are accepted only from GitHub's release hosts. `RMC_UPDATE_API` may point
+   at an HTTPS mirror of the releases API instead; signatures are still
+   required;
+2. picks the newest published release above the running version for its
+   channel, skipping drafts and versions that were rolled back on this machine;
+3. requires `SHA256SUMS` and `SHA256SUMS.sig`, and verifies the signature
+   against the release keys compiled into the running binary. Unsigned or
+   wrongly signed releases are never installed;
+4. downloads only this component's archive for this platform and checks its
+   SHA-256 against the signed `SHA256SUMS`;
+5. extracts only the executable, and runs its `version` command: the version,
+   component, platform and wire version must match.
+
+### Installing and restarting
+
+The updater waits until the service is idle: for a node, no tool call or managed
+process is running; for a Hub, no MCP request is in progress. A node that stays
+busy is restarted after 24 hours anyway. It refuses to continue if someone
+replaced the executable on disk since the service started.
+
+It then keeps the current executable as `NAME.previous`, renames the new one
+into place, and re-executes it in the same process. The PID and arguments stay
+the same, so systemd and launchd see one continuous service; this was checked
+under launchd on macOS (see the [validation record](validation/2026-11-09-auto-update.md)).
+If the re-exec fails, the service exits with an error and its service manager
+starts the new executable.
+
+A restart ends the node's managed process sessions, which is why the updater
+waits for idle. Run long-lived work as its own systemd or launchd service.
+
+### Health checks and rollback
+
+A new version must confirm that it is healthy:
+
+- a node confirms on its first successful connection to its Hub;
+- a Hub confirms after serving for 60 seconds.
+
+A version that has not confirmed after 3 starts is rolled back on the 4th
+start: `NAME.previous` is restored and executed. A node that has not reached its
+Hub within 10 minutes is also rolled back, but only while the Hub itself answers
+`/healthz`, so a Hub outage does not roll back healthy nodes. A rolled-back
+version is recorded in `CONFIG-STEM.update-state.json` (for example
+`node.update-state.json`) and never retried on that machine; the next higher
+release is installed normally.
+
+Rollback cannot catch a version that crashes before its start is counted; the
+`version` check before installing guards against that.
+
+### Upgrading from v0.2
+
+The v0.2 updater accepts only the old `agent` component, so moving to v0.3 is a
+one-time manual upgrade: install the v0.3 binary in a directory the service
+account owns, point the service at it, and restart. From then on the
+installation updates itself. See [Migrating from HostMCP](migrating-from-hostmcp.md).
+
+Release owners: see [Releasing RMC](releasing.md) for signing and canary
+rollout.
+
+## Pinned manual updates
+
+For a node where automatic updates are off, `node update` installs one exact
+version from a private local policy. It never runs on its own; schedule it with a
+systemd timer or launchd job if needed. It accepts only the fixed GitHub source
+`soren-labs/rmc`, an exact stable version, this platform, and a SHA-256 that you
+pin in the policy. That pin is the trust anchor, so obtain it through your own
+review channel, not from the `SHA256SUMS` downloaded beside the archive. Policy
+files and executables must belong to the calling user, policy files must be
+private, and the updater refuses to run as root.
 
 ```json
 {
   "version": 1,
   "enabled": true,
   "channel": "stable",
-  "target_version": "0.2.2",
+  "target_version": "0.3.0",
   "sha256": "REPLACE_WITH_64_HEX_DIGITS_FOR_THE_NODE_ARCHIVE",
   "binary": "/home/worker/.local/bin/rmc-node"
 }
 ```
 
-Place this in a `0600` file in the operator's private configuration directory. Use
-the actual, absolute path without symlinked parent directories (resolve `/var` to
-`/private/var` on macOS if necessary). The target must already be a node-only
-binary reporting a stable build version. Migrate legacy combined binaries manually
-once; this updater will not overwrite a Hub or compatibility binary. Do not deploy
-user-writable executables as root services.
-
-Obtain the expected digest through your trusted release-review/configuration
-channel, independently of the artifact being downloaded. SHA256SUMS downloaded
-beside a binary alone does not authenticate a compromised publisher. The fixed
-source is authenticated by normal HTTPS certificate validation; this version does
-not implement release signing, Sigstore/TUF, a private GitHub credential flow, or
-key rotation for signed release manifests. The local checksum pin is the content
-trust anchor; protecting its distribution is the operator's responsibility.
+Use the real absolute path without symlinked parents (on macOS, `/private/var`
+rather than `/var`). The target must already be a node-only binary reporting a
+stable version.
 
 ```sh
 rmc-node node update --policy /absolute/path/node-update.json
-# Or transfer a reviewed archive without giving the node network access:
+# Or install a reviewed archive without network access:
 rmc-node node update --policy /absolute/path/node-update.json \
   --archive /absolute/path/rmc-node_X.Y.Z_linux_amd64.tar.gz
-```
-
-The updater locks the target, refuses automatic downgrade, bounds download and
-extraction sizes, verifies SHA-256 **before extraction/execution**, extracts only
-the expected regular executable (rejecting archive links and unsafe paths), stages
-on the same filesystem, and executes its `version` command with bounded output and
-a deadline. The candidate must match the pinned version, node role, platform and
-wire v1. It syncs staging, preserves the original executable at `.previous`, then
-atomically renames the candidate. A directory-sync error after rename explicitly
-reports that replacement occurred; inspect version before deciding next steps.
-Failures before replacement leave the executable unchanged. An existing `.previous`
-blocks a later upgrade so rollback is never overwritten. After confirming a rollout,
-archive/remove that backup locally before pinning the next version.
-
-A process already running continues using its old executable. The updater does
-**not** restart services, interrupt sessions, test the new process's Hub connection
-or automatically roll back a process that fails after restart. Plan an explicit
-restart and check the running version/online state. To restore the retained binary:
-
-```sh
+# Restore the previous executable:
 rmc-node node update --policy /absolute/path/node-update.json --rollback
-# Restart the same service, then verify list_devices and device_info.
 ```
 
-If the new executable cannot start at all, use another verified RMC updater
-or restore the local `.previous` file to the original path with a same-directory
-rename before restarting. Rollback consumes the local backup and never downloads a URL. Revoke or change the
-target policy before the next scheduled update if you want the node to stay on the
-rolled-back version. `.update.lock` is a persistent coordination file; process exit
-releases its OS lock. A crash after backup creation may leave `.previous` while the
-original remains active; inspect versions before clearing that backup.
-
-For many nodes, distribute one reviewed desired version with per-platform digest
-pins using your existing configuration management. Roll out to a canary, verify
-online version and a harmless identity call, then expand in batches. No Hub/node
-release-tag equality is required. For optional periodic replacement, a user-level
-systemd timer or launchd job can run the above fixed-policy command at a chosen
-interval; it is a no-op without a download once the installed version matches.
-Keep service restart as an explicit maintenance operation. This is a functional
-pinned updater, not an automatic latest-version discovery or fleet orchestrator.
+It verifies the pinned SHA-256 before extracting, extracts only the executable,
+checks its `version`, keeps `.previous` and renames atomically, like the
+automatic updater. Unlike it, it does not restart the service, check health or
+roll back by itself: restart the service in a maintenance window, then check
+`list_devices` and `device_info`. An existing `.previous` blocks the next pinned
+upgrade so a rollback copy is never overwritten; remove it once the rollout is
+confirmed.
 
 ## Health and restart operations
 

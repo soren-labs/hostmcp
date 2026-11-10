@@ -92,6 +92,13 @@ that legacy archive, and the v0.2.x updater accepts only builds whose component 
 with [Upgrading an existing node](#upgrading-an-existing-node). The `rmc node update`
 command in [Hub and node lifecycle](components-updates.md) uses the `rmc-node_…` archives.
 
+After that one manual upgrade, v0.3 Hubs and nodes update themselves to later
+signed releases ([automatic updates](components-updates.md#automatic-updates)),
+as long as the service account can write the directory that holds the
+executable. A binary installed root-owned in `/usr/local/bin` stays manual; to
+change that, install it in a directory the service account owns, such as
+`~/.local/bin`, and point the service at it.
+
 ## MCP client configuration
 
 The Hub URL, bearer tokens, OAuth settings and Cloudflare Access settings are
