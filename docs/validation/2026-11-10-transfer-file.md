@@ -12,12 +12,33 @@ credentials, removed afterwards. No real Hub, node or user data was involved.
 
 | Check | Result |
 | --- | --- |
-| Local run of every `ci.yml` step (script syntax, `make fmt`, vet, `go test -race ./...`, build, stdio smoke, version/doctor, golangci-lint; govulncheck v1.9.0 on macOS) for #25 at `ad34050` and this change at `5ead121`, Linux x86_64 and macOS arm64 | Pass on both |
+| Local run of every `ci.yml` step (script syntax, `make fmt`, vet, `go test -race ./...`, build, stdio smoke, version/doctor, golangci-lint; govulncheck v1.9.0 on macOS) for #25 at `ad34050` and this change at `5ead121` and again at the final commit, Linux x86_64 and macOS arm64 | Pass on both |
 | GitHub Actions CI on #25 (ubuntu-latest and macos-latest runtime, lint, govulncheck) | Pass |
 | `scripts/smoke.py --mode stdio` | Pass: all eleven native tools, including a chunked base64 copy with `read.offset`, `write_file.append`/`expected_size` and `move_path` |
 | `TestTransferFilePollCancelAndSourceChange`, 20 repeated runs | Pass |
 | `go test -race -count=3 -run TestTransfer ./internal/hub` | Pass |
 | Regression tests that fail on the previous code: `TestAutoUpdateAlreadyInstalledWaitsForIdle`, the anchored-pattern case of `TestSearchContent` | Fail before, pass after |
+
+## Defect found and fixed
+
+The first GitHub run of this change failed `TestTransferFilePollCancelAndSourceChange`
+on macos-latest: after a cancel, the staging file could not be removed. With
+the cleanup error added to the result, the Mac mini reproduced it in 1 of 40
+runs under `-race -cpu 2`: the target node was offline at that moment.
+`Hub.Call` wrote the request frame with the caller's context, and
+coder/websocket closes the connection when a write's context ends mid-frame,
+so canceling a call while its chunk was being written dropped the node and
+every other call on it. That affects any canceled call, not only transfers:
+an MCP client canceling, or the request deadline passing. The Hub now finishes
+writing a dispatched request within its 10-second write timeout.
+`TestCancelDuringDispatchKeepsConnection` failed 15 of 15 runs before the fix.
+
+| Check after the fix | Result |
+| --- | --- |
+| `TestTransferFilePollCancelAndSourceChange`, `-race -cpu 2 -count=200`, Mac mini | 200 of 200 pass |
+| `TestCancelDuringDispatchKeepsConnection`, `-race -cpu 2 -count=20`, Mac mini | 20 of 20 pass |
+| GitHub Actions CI (ubuntu-latest and macos-latest runtime, lint, govulncheck) | Pass |
+| Local `ci.yml` steps, Linux x86_64 | Pass |
 
 ## End to end (Mac mini, real binary)
 
