@@ -75,6 +75,13 @@ def main():
             run(target, "node", "update", "--policy", policy, "--archive", asset, ok=False)
             assert target.read_bytes() == old
             print("Root replacement refusal verified; non-root updater smoke requires a user account.")
+        elif "-" in version:
+            # The pinned updater installs exact stable versions only, so a
+            # release candidate is refused and the target stays unchanged.
+            refused = run(target, "node", "update", "--policy", policy, "--archive", asset, ok=False)
+            assert "exact stable version" in refused.stderr, refused.stderr
+            assert target.read_bytes() == old
+            print("Release candidate: pinned updater refusal verified; upgrade and rollback run for stable versions.")
         else:
             run(target, "node", "update", "--policy", policy, "--archive", bad, ok=False)
             assert target.read_bytes() == old
