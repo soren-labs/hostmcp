@@ -678,7 +678,7 @@ func nodeCommand(ctx context.Context, args []string) error {
 		defer rt.Close()
 		info := rt.Info(a.DeviceID)
 		info.AutoUpdate = su.mode()
-		runCtx := su.serve(ctx, rt.Busy)
+		runCtx := su.serve(ctx, func() bool { return !rt.Busy() })
 		su.rollbackUnlessConfirmed(runCtx, nodeConfirmWait, hubReachable(a))
 		err = node.RunHooks(runCtx, a, rt, info, node.Hooks{Connected: confirm})
 		return su.finish(ctx, err, func() { _ = rt.Close() })
