@@ -222,6 +222,10 @@ several accounts on one machine, see [account nodes](docs/account-nodes.md).
   without touching other clients or devices.
 - **The Hub only routes.** It authenticates, checks the client's node grants and
   forwards the call. It has no command executor.
+- **Signed automatic updates.** Hubs and nodes install new releases only when
+  they are signed with the offline release key, wait until idle, and roll back a
+  version that does not become healthy. Turn this off on a machine with
+  `rmc update disable`; see [automatic updates](docs/components-updates.md#automatic-updates).
 - **OS protections still apply**: file permissions, sudo policy, SELinux/AppArmor,
   and macOS TCC/SIP.
 
@@ -255,6 +259,7 @@ Not supported today:
 | External OAuth | [docs/oauth.md](docs/oauth.md) | English |
 | Cloudflare Access Managed OAuth | [docs/cloudflare-access.md](docs/cloudflare-access.md) | English |
 | Hub/node components, compatibility and updates | [docs/components-updates.md](docs/components-updates.md) | English |
+| Releasing: signing and canary rollout | [docs/releasing.md](docs/releasing.md) | English |
 | Validation records | [docs/validation/](docs/validation/README.md) | 中文 / English |
 
 Translations of the Chinese documents are welcome.

@@ -10,7 +10,9 @@ import (
 	"github.com/soren-labs/rmc/internal/update"
 )
 
-func updateCommand(ctx context.Context, args []string) error {
+// pinnedUpdateCommand is the opt-in, policy-pinned updater from v0.2. Automatic
+// updates (rmc update ...) replace it for most installations.
+func pinnedUpdateCommand(ctx context.Context, args []string) error {
 	f := flags("node update")
 	policyFile := f.String("policy", "", "private, locally provisioned update policy JSON")
 	archiveFile := f.String("archive", "", "offline release archive; must match policy checksum")

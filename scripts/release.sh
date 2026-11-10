@@ -8,8 +8,9 @@ if [[ -z "$release_version" ]]; then
   exit 2
 fi
 release_version="${release_version#v}"
-if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
-  printf '%s\n' 'Invalid release version' >&2
+# Releases are X.Y.Z or release candidates X.Y.Z-rc.N; updaters ignore other tags.
+if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]]; then
+  printf '%s\n' 'Invalid release version: use vX.Y.Z or vX.Y.Z-rc.N' >&2
   exit 2
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

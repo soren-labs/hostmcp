@@ -207,6 +207,9 @@ rmc service install --role node --config ~/.config/rmc/node.json --name rmc-node
 - **凭证相互独立**：客户端、设备邀请、设备连接各用各的凭证。Hub 只保存 SHA-256
   哈希。每个 token 可以单独限定范围、轮换和撤销，不影响其他客户端或设备。
 - **Hub 只做路由。** 它负责认证、检查客户端的节点授权并转发调用，没有命令执行器。
+- **签名的自动更新。** Hub 和节点只安装用离线发布密钥签名的新版本，等空闲时再
+  重启，新版本不健康时自动回滚。在某台机器上用 `rmc update disable` 关闭；见
+  [自动更新](docs/components-updates.md#automatic-updates)。
 - **系统保护依然有效**：文件权限、sudo 策略、SELinux/AppArmor、macOS TCC/SIP。
 
 把 Hub 暴露到公网之前，请先阅读完整的[安全模型](docs/security.md)。漏洞请按
@@ -237,6 +240,7 @@ RMC 尚未到 1.0：面向单个所有者或单个信任域，minor 版本之间
 | 外部 OAuth | [docs/oauth.md](docs/oauth.md) | English |
 | Cloudflare Access Managed OAuth | [docs/cloudflare-access.md](docs/cloudflare-access.md) | English |
 | Hub/节点组件、兼容性与更新 | [docs/components-updates.md](docs/components-updates.md) | English |
+| 发布：签名与金丝雀发布 | [docs/releasing.md](docs/releasing.md) | English |
 | 验证记录 | [docs/validation/](docs/validation/README.md) | 中文 / English |
 
 ## 参与开发

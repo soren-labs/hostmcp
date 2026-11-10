@@ -48,6 +48,8 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
   rmc node enroll --invite INVITE.json|- [--config NODE.json]
   rmc node run [--config NODE.json] [--log-format text|json]
   rmc node update --policy POLICY.json [--archive RELEASE.tar.gz | --rollback]
+  rmc update status|enable|disable|check [--config FILE]
+  rmc update channel stable|canary [--config FILE]
   rmc token create --id NAME --devices '*' --output TOKEN [--config HUB.json]
   rmc token list [--config HUB.json]
   rmc token update --id NAME --devices NODE1,NODE2 [--config HUB.json]
@@ -58,11 +60,13 @@ const usage = `RMC — native Linux/macOS tools, locally or across your devices
   rmc service install --role hub|node --config FILE [--name rmc-NAME] [--system --user OS_USER]
   rmc service uninstall --name rmc-NAME [--system]
   rmc doctor [--hub-config HUB.json] [--hub-url URL]
+  rmc release keygen --output KEY | sign --key KEY --tag vX.Y.Z --output SHA256SUMS.sig | verify --tag vX.Y.Z
   rmc version
 
 Run a subcommand with --help for flags. Secrets are written to private files.
 MCP HTTP requires a client credential or a configured, verified Access assertion.
 Native devices use separate credentials and outbound connections.
+Hubs and nodes install signed releases automatically; "rmc update disable" turns that off.
 Nodes were called agents before v0.3; "rmc agent ..." still works.
 `
 
@@ -155,6 +159,10 @@ func run(ctx context.Context, args []string) error {
 		return serviceCommand(args[1:])
 	case "doctor":
 		return doctor(ctx, args[1:])
+	case "update":
+		return autoUpdateCommand(ctx, args[1:])
+	case "release":
+		return releaseCommand(args[1:])
 	case "stdio":
 		f := flags("stdio")
 		if err := parse(f, args[1:]); err != nil {
@@ -302,6 +310,8 @@ func hubCommand(ctx context.Context, args []string) error {
 		if err := setLogFormat(*logFormat); err != nil {
 			return err
 		}
+		su := newSelfUpdater(*path)
+		confirm := su.startup()
 		store := config.NewStore(*path)
 		cfg, err := store.Snapshot()
 		if err != nil {
@@ -316,18 +326,27 @@ func hubCommand(ctx context.Context, args []string) error {
 		errCh := make(chan error, 1)
 		go func() { errCh <- srv.ListenAndServe() }()
 		log.Printf("RMC hub listening on %s; public MCP %s/mcp", cfg.Listen, cfg.PublicURL)
-		select {
-		case err := <-errCh:
-			if errors.Is(err, http.ErrServerClosed) {
-				return nil
+		serveCtx := su.serve(ctx, h.Idle)
+		healthy := time.NewTimer(hubConfirmAfter)
+		defer healthy.Stop()
+	serving:
+		for {
+			select {
+			case err := <-errCh:
+				if errors.Is(err, http.ErrServerClosed) {
+					return nil
+				}
+				return err
+			case <-healthy.C:
+				confirm()
+			case <-serveCtx.Done():
+				break serving
 			}
-			return err
-		case <-ctx.Done():
 		}
 		_ = h.Close()
 		shutdown, stop := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stop()
-		return srv.Shutdown(shutdown)
+		return su.finish(ctx, srv.Shutdown(shutdown), func() {})
 	default:
 		return errors.New("use hub init, hub serve or hub configure")
 	}
@@ -572,7 +591,7 @@ func nodeConfigFile() string {
 
 func nodeCommand(ctx context.Context, args []string) error {
 	if len(args) > 0 && args[0] == "update" {
-		return updateCommand(ctx, args[1:])
+		return pinnedUpdateCommand(ctx, args[1:])
 	}
 	if len(args) == 0 {
 		return errors.New("use node enroll, node run or node update")
@@ -650,12 +669,19 @@ func nodeCommand(ctx context.Context, args []string) error {
 		if _, err := config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
 		}
+		su := newSelfUpdater(*path)
+		confirm := su.startup()
 		rt, err := host.NewForDevice(a.DeviceID)
 		if err != nil {
 			return err
 		}
 		defer rt.Close()
-		return node.Run(ctx, a, rt, rt.Info(a.DeviceID))
+		info := rt.Info(a.DeviceID)
+		info.AutoUpdate = su.mode()
+		runCtx := su.serve(ctx, func() bool { return !rt.Busy() })
+		su.rollbackUnlessConfirmed(runCtx, nodeConfirmWait, hubReachable(a))
+		err = node.RunHooks(runCtx, a, rt, info, node.Hooks{Connected: confirm})
+		return su.finish(ctx, err, func() { _ = rt.Close() })
 	default:
 		return errors.New("use node enroll, node run or node update")
 	}

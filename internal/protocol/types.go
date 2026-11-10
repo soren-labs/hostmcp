@@ -56,6 +56,9 @@ type Device struct {
 	Version        string    `json:"version"`
 	Online         bool      `json:"online"`
 	ConnectedAt    time.Time `json:"connected_at,omitzero"`
+	// AutoUpdate is "stable", "canary", "off" or "manual"; empty from nodes
+	// that predate automatic updates. Old Hubs ignore it.
+	AutoUpdate string `json:"auto_update,omitempty"`
 }
 
 type Message struct {

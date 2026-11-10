@@ -28,15 +28,26 @@ const (
 	heartbeatTimeout  = 8 * time.Second
 )
 
+// Hooks observe the connection without changing the wire protocol.
+type Hooks struct {
+	// Connected runs after each accepted Hub handshake.
+	Connected func()
+}
+
 // Run reconnects the transport while retaining the caller-owned executor. It
 // never resends a tool request. A disconnected reply is lost, but managed
 // processes remain queryable through the executor after reconnection.
 func Run(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device) error {
-	return runWithHeartbeat(ctx, cfg, executor, info, heartbeatInterval, heartbeatTimeout)
+	return RunHooks(ctx, cfg, executor, info, Hooks{})
+}
+
+// RunHooks is Run with connection hooks.
+func RunHooks(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device, hooks Hooks) error {
+	return runWithHeartbeat(ctx, cfg, executor, info, heartbeatInterval, heartbeatTimeout, hooks)
 }
 
 // Keep heartbeat timing local to a run so tests do not mutate process-wide state.
-func runWithHeartbeat(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device, interval, timeout time.Duration) error {
+func runWithHeartbeat(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device, interval, timeout time.Duration, hooks Hooks) error {
 	endpoint, err := endpointURL(cfg)
 	if err != nil {
 		return err
@@ -62,7 +73,7 @@ func runWithHeartbeat(ctx context.Context, cfg config.Node, executor protocol.Ex
 			return nil
 		}
 		start := time.Now()
-		err = connect(ctx, endpoint, cfg.Token, executor, info, slots, seen, &workers, interval, timeout)
+		err = connect(ctx, endpoint, cfg.Token, executor, info, slots, seen, &workers, interval, timeout, hooks.Connected)
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -125,7 +136,7 @@ func (e *authorizationError) Error() string {
 	return fmt.Sprintf("hub rejected device authentication (HTTP %d); check enrollment or revocation", e.code)
 }
 
-func connect(ctx context.Context, endpoint, token string, executor protocol.Executor, info protocol.Device, slots chan struct{}, seen *requestIDs, workers *sync.WaitGroup, interval, timeout time.Duration) (err error) {
+func connect(ctx context.Context, endpoint, token string, executor protocol.Executor, info protocol.Device, slots chan struct{}, seen *requestIDs, workers *sync.WaitGroup, interval, timeout time.Duration, connected func()) (err error) {
 	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	conn, response, err := websocket.Dial(dialCtx, endpoint, &websocket.DialOptions{
 		HTTPHeader:      http.Header{"Authorization": []string{"Bearer " + token}},
@@ -160,6 +171,9 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 		return errors.New("incompatible hub protocol")
 	}
 	log.Printf("device %s connected; hub_version=%q wire_version=%d", info.ID, welcome.BuildVersion, welcome.Version)
+	if connected != nil {
+		connected()
+	}
 	connectionCtx, stop := context.WithCancel(ctx)
 	heartbeatDone := make(chan error, 1)
 	go func() {

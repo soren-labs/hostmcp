@@ -22,7 +22,7 @@ func checkRole(role, command string) error {
 		return nil
 	}
 	switch command {
-	case "help", "--help", "-h", "version", "--version", "service", "doctor":
+	case "help", "--help", "-h", "version", "--version", "service", "doctor", "update":
 		return nil
 	case "hub", "device", "token", "connect", "call":
 		if role == "hub" {

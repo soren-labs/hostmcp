@@ -7,6 +7,34 @@ are generated from the matching section of this file.
 
 ## Unreleased
 
+### Automatic updates
+
+- Hubs and nodes now keep themselves on the newest release, **on by default**.
+  A running `hub serve` or `node run` checks GitHub releases about hourly,
+  installs the newest release of its channel, waits until it is idle (no tool
+  call, managed process or MCP request in progress; at most 24 hours), keeps
+  the previous executable and restarts in place.
+- Releases are installed only when `SHA256SUMS.sig` verifies against a release
+  key compiled into the running binary. The key is held offline by the owner:
+  CI now creates **draft** releases only, and `scripts/sign-release.sh` checks,
+  signs and publishes them. See [Releasing RMC](docs/releasing.md).
+- A new version that is not healthy is rolled back and never retried on that
+  machine: after 3 starts without confirming health, or for a node, after 10
+  minutes without reaching a Hub that is itself up.
+- Two channels: `stable` (default) and `canary`, which also installs release
+  candidates (`vX.Y.Z-rc.N`). Release candidates go to canary nodes before the
+  final release goes to everyone.
+- New commands: `rmc update status|enable|disable|check` and
+  `rmc update channel stable|canary`, with settings in `updates.json` beside the
+  configuration; `rmc release keygen|sign|verify` for release owners.
+  `RMC_AUTO_UPDATE=off` also turns updates off; the container image sets it.
+- `list_devices` reports each node's `auto_update` mode: `stable`, `canary`,
+  `off` or `manual`. Development builds, root services and executables in
+  directories the service account cannot write are `manual` and never replaced.
+- Release tags must be `vX.Y.Z` or `vX.Y.Z-rc.N`.
+- Upgrading from v0.2.x is a one-time manual step; see
+  [automatic updates](docs/components-updates.md#automatic-updates).
+
 ### Renamed: Agent is now Node
 
 - The device-side component is now a **node**, because "agent" also names the AI

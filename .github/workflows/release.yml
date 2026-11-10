@@ -8,7 +8,7 @@ on:
       version:
         description: 'Archive version (manual branch runs build artifacts only)'
         required: true
-        default: v0.2.4
+        default: v0.3.0
 
 permissions:
   contents: read
@@ -74,21 +74,32 @@ jobs:
             scripts/changelog-notes.sh
           sparse-checkout-cone-mode: false
       - name: Extract release notes from CHANGELOG.md
+        # A release candidate (vX.Y.Z-rc.N) may use the Unreleased section.
         run: |
-          if ! sh scripts/changelog-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"; then
-            echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"
-            exit 1
+          if sh scripts/changelog-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"; then
+            exit 0
           fi
+          case "$GITHUB_REF_NAME" in
+            *-rc.*) sh scripts/changelog-notes.sh Unreleased > "$RUNNER_TEMP/release-notes.md" && exit 0 ;;
+          esac
+          echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"
+          exit 1
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-archives
           path: dist
-      - name: Publish verified tag
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        # CI never publishes: devices install only releases signed with the
+        # offline release key, so the owner runs scripts/sign-release.sh, which
+        # verifies these assets, signs SHA256SUMS and publishes the draft.
         # The changelog section comes first; --generate-notes appends the PR list.
-        run: >-
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag
-          --title "RMC $GITHUB_REF_NAME"
-          --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes
+        run: |
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-rc.*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft $prerelease \
+            --title "RMC $GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes
+          echo "Draft created. Sign and publish: bash scripts/sign-release.sh $GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"

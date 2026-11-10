@@ -224,7 +224,7 @@ docker compose -f deploy/compose.yml down
 不要加 --volumes，除非明确决定删除配置、邀请和凭证。容器示例是否实际构建与
 验证以[验证记录](validation/README.md)为准，提供模板不等同于已经通过 Docker 实机验收。
 
-## 独立组件、OAuth 与可选更新
+## 独立组件、OAuth 与自动更新
 
 新源码的 `rmc-hub` 与 `rmc-node` 有独立产物和安装路径；兼容二进制
 `rmc` 保留。Hub 认证、元数据和路由升级保持 wire v1 时，无需重新部署每个
@@ -236,9 +236,12 @@ docker compose -f deploy/compose.yml down
 节点不接受 OAuth 客户端凭证，也无需重新注册。反向代理必须公开受保护资源
 元数据路径并透传 `/mcp` 的 challenge 与 Authorization header。
 
-可选节点更新通过每节点本地策略启用，固定 stable 版本和平台归档 SHA-256，
-不接受 Hub URL 下发、不默认更新 root、不提升权限或自动重启。可由用户 timer
-定时调用，再在维护窗口重启并检查在线版本；没有物理开机或故障硬件修复功能。
+从 v0.3 起，Hub 与节点默认自动安装经离线发布密钥签名的新版本：等待空闲后原地
+重启，新版本不健康时自动回滚。`rmc update disable` 关闭，`rmc update status`
+查看状态；以 root 运行或安装在服务账户不可写目录中的实例不会自动更新。Docker
+镜像设置了 `RMC_AUTO_UPDATE=off`，通过更换镜像升级。细节见
+[自动更新](components-updates.md#automatic-updates)，发布者流程见
+[发布流程](releasing.md)。没有物理开机或故障硬件修复功能。
 
 ## 升级、撤销与卸载
 
