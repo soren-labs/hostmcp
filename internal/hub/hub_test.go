@@ -17,8 +17,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/soren-labs/rmc/internal/agent"
 	"github.com/soren-labs/rmc/internal/config"
+	"github.com/soren-labs/rmc/internal/node"
 	"github.com/soren-labs/rmc/internal/protocol"
 )
 
@@ -80,7 +80,7 @@ func startAgent(t *testing.T, url string, exec protocol.Executor) context.Cancel
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- agent.Run(ctx, config.Agent{Version: 1, HubURL: url, DeviceID: "dev1", Token: deviceToken}, exec, protocol.Device{ID: "dev1", Hostname: "test", OS: "test", Username: "test-user"})
+		done <- node.Run(ctx, config.Node{Version: 1, HubURL: url, DeviceID: "dev1", Token: deviceToken}, exec, protocol.Device{ID: "dev1", Hostname: "test", OS: "test", Username: "test-user"})
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -321,7 +321,7 @@ func TestEnrollmentIsSingleUseAndDeviceTokenIsNotClientToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cfg config.Agent
+	var cfg config.Node
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestSameMachineAccountsHaveIndependentNodeScopes(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
 		go func() {
-			done <- agent.Run(ctx, config.Agent{Version: 1, HubURL: srv.URL, DeviceID: entry.id, Token: entry.token, ExpectedUser: entry.user}, entry.executor, protocol.Device{ID: entry.id, Hostname: "same-machine", OS: "linux", Username: entry.user, UID: entry.uid, EUID: entry.uid})
+			done <- node.Run(ctx, config.Node{Version: 1, HubURL: srv.URL, DeviceID: entry.id, Token: entry.token, ExpectedUser: entry.user}, entry.executor, protocol.Device{ID: entry.id, Hostname: "same-machine", OS: "linux", Username: entry.user, UID: entry.uid, EUID: entry.uid})
 		}()
 		t.Cleanup(func() {
 			cancel()

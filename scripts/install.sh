@@ -4,7 +4,7 @@ set -eu
 
 usage() {
   cat <<'EOF'
-Usage: sh install.sh --version v0.3.0 [--role all|hub|agent] [--prefix DIR] [--repository OWNER/REPO]
+Usage: sh install.sh --version v0.3.0 [--role all|hub|node] [--prefix DIR] [--repository OWNER/REPO]
        sh install.sh --version v0.3.0 --archive PATH --checksums PATH [--prefix DIR]
 
 Downloads the requested GitHub release, verifies SHA-256, and installs the selected
@@ -52,8 +52,9 @@ case "$(uname -m)" in
 esac
 case "$role" in
   all) binary=rmc ;;
-  hub|agent) binary="rmc-$role" ;;
-  *) fail 'role must be all, hub or agent' ;;
+  hub|node) binary="rmc-$role" ;;
+  agent) role=node; binary=rmc-node ;;
+  *) fail 'role must be all, hub or node' ;;
 esac
 asset="${binary}_${version}_${target_os}_${target_arch}.tar.gz"
 

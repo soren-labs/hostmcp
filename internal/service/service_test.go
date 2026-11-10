@@ -54,7 +54,7 @@ func TestReviewSystemdExecEscapesDollarLiterals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(unit, `ExecStart="/bin/$$BIN" agent run --config "/tmp/$${HOME} $$$$ spaced%%path.json"`) {
+	if !strings.Contains(unit, `ExecStart="/bin/$$BIN" node run --config "/tmp/$${HOME} $$$$ spaced%%path.json"`) {
 		t.Fatalf("systemd ExecStart would expand a literal configuration filename:\n%s", unit)
 	}
 	if !strings.Contains(unit, `Environment="HOME=/home/a"`) {

@@ -61,8 +61,8 @@ func updaterFixture(t *testing.T) (Policy, []byte) {
 	if err = os.Chmod(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	old := testBinary("0.2.1", "agent", 1)
-	binary := filepath.Join(dir, "rmc-agent")
+	old := testBinary("0.2.1", "node", 1)
+	binary := filepath.Join(dir, "rmc-node")
 	if err = os.WriteFile(binary, old, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +71,8 @@ func updaterFixture(t *testing.T) (Policy, []byte) {
 func pin(p *Policy, b []byte) { sum := sha256.Sum256(b); p.SHA256 = hex.EncodeToString(sum[:]) }
 func TestUpdaterAtomicInstallRollbackAndNoop(t *testing.T) {
 	p, old := updaterFixture(t)
-	next := testBinary("0.2.2", "agent", 1)
-	archive := testArchive(t, next, "rmc-agent", tar.TypeReg)
+	next := testBinary("0.2.2", "node", 1)
+	archive := testArchive(t, next, "rmc-node", tar.TypeReg)
 	pin(&p, archive)
 	changed, err := Apply(context.Background(), p, bytes.NewReader(archive))
 	if err != nil || !changed {
@@ -106,15 +106,15 @@ func TestUpdaterFailuresLeaveBinaryUnchanged(t *testing.T) {
 		kind          byte
 		corrupt       bool
 	}{
-		{"checksum", "0.2.2", "agent", 1, "rmc-agent", tar.TypeReg, true},
-		{"wrong-version", "0.2.3", "agent", 1, "rmc-agent", tar.TypeReg, false},
-		{"wrong-component", "0.2.2", "hub", 1, "rmc-agent", tar.TypeReg, false},
-		{"wrong-wire", "0.2.2", "agent", 2, "rmc-agent", tar.TypeReg, false},
-		{"traversal", "0.2.2", "agent", 1, "../rmc-agent", tar.TypeReg, false},
-		{"absolute", "0.2.2", "agent", 1, "/rmc-agent", tar.TypeReg, false},
-		{"symlink", "0.2.2", "agent", 1, "rmc-agent", tar.TypeSymlink, false},
-		{"hardlink", "0.2.2", "agent", 1, "rmc-agent", tar.TypeLink, false},
-		{"missing-binary", "0.2.2", "agent", 1, "different", tar.TypeReg, false},
+		{"checksum", "0.2.2", "node", 1, "rmc-node", tar.TypeReg, true},
+		{"wrong-version", "0.2.3", "node", 1, "rmc-node", tar.TypeReg, false},
+		{"wrong-component", "0.2.2", "hub", 1, "rmc-node", tar.TypeReg, false},
+		{"wrong-wire", "0.2.2", "node", 2, "rmc-node", tar.TypeReg, false},
+		{"traversal", "0.2.2", "node", 1, "../rmc-node", tar.TypeReg, false},
+		{"absolute", "0.2.2", "node", 1, "/rmc-node", tar.TypeReg, false},
+		{"symlink", "0.2.2", "node", 1, "rmc-node", tar.TypeSymlink, false},
+		{"hardlink", "0.2.2", "node", 1, "rmc-node", tar.TypeLink, false},
+		{"missing-binary", "0.2.2", "node", 1, "different", tar.TypeReg, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestUpdaterFailuresLeaveBinaryUnchanged(t *testing.T) {
 }
 func TestUpdaterPolicyLockAndBackupGuards(t *testing.T) {
 	p, old := updaterFixture(t)
-	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "rmc-agent", tar.TypeReg)
+	archive := testArchive(t, testBinary("0.2.2", "node", 1), "rmc-node", tar.TypeReg)
 	pin(&p, archive)
 	for _, edit := range []func(*Policy){func(p *Policy) { p.Enabled = false }, func(p *Policy) { p.Channel = "latest" }, func(p *Policy) { p.TargetVersion = "0.2.3-rc.1" }, func(p *Policy) { p.TargetVersion = "../../evil" }, func(p *Policy) { p.SHA256 = "" }, func(p *Policy) { p.Binary = "relative" }} {
 		invalid := p
@@ -232,7 +232,7 @@ func TestUpdaterRejectsSymlinkTargetAndLock(t *testing.T) {
 }
 func TestUpdaterFixedSource(t *testing.T) {
 	p := Policy{TargetVersion: "1.2.3"}
-	if got := releaseURL(p); !strings.HasPrefix(got, "https://github.com/soren-labs/rmc/releases/download/v1.2.3/rmc-agent_1.2.3_") {
+	if got := releaseURL(p); !strings.HasPrefix(got, "https://github.com/soren-labs/rmc/releases/download/v1.2.3/rmc-node_1.2.3_") {
 		t.Fatal(got)
 	}
 }
@@ -286,9 +286,9 @@ func (r *replacingReader) Read(b []byte) (int, error) {
 }
 func TestUpdaterConcurrentManualReplacementIsPreserved(t *testing.T) {
 	p, _ := updaterFixture(t)
-	archive := testArchive(t, testBinary("0.2.2", "agent", 1), "rmc-agent", tar.TypeReg)
+	archive := testArchive(t, testBinary("0.2.2", "node", 1), "rmc-node", tar.TypeReg)
 	pin(&p, archive)
-	manual := testBinary("0.2.3", "agent", 1)
+	manual := testBinary("0.2.3", "node", 1)
 	reader := &replacingReader{reader: bytes.NewReader(archive), replace: func() {
 		temp := p.Binary + ".manual"
 		if err := os.WriteFile(temp, manual, 0755); err != nil {

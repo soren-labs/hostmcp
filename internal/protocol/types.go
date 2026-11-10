@@ -70,8 +70,8 @@ type Message struct {
 	Device       *Device         `json:"device,omitempty"`
 	Result       *Result         `json:"result,omitempty"`
 	Error        string          `json:"error,omitempty"`
-	// ToolArgs is optional in an Agent hello: each native tool the Agent
-	// executes and its accepted top-level argument names. Older Agents omit it
+	// ToolArgs is optional in a node hello: each native tool the node
+	// executes and its accepted top-level argument names. Older nodes omit it
 	// and older Hubs ignore it.
 	ToolArgs map[string][]string `json:"tool_args,omitempty"`
 }

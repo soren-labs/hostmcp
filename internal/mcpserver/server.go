@@ -21,7 +21,7 @@ type Options struct {
 
 func New(opts Options) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "rmc", Version: protocol.Version}, &mcp.ServerOptions{
-		Instructions: "Each RMC node is one machine plus the OS account running its agent. Different node IDs on the same machine can represent ordinary and root accounts. A credential grants the native authority of its allowed nodes; there are no directory or command allowlists. Select an online node and check its username and UID before remote tool calls. Long commands return a session ID; use write_stdin to collect output and terminate_process to stop them. A network failure does not roll back a command: query processes after reconnecting and do not blindly repeat side effects.",
+		Instructions: "Each RMC node is one machine plus the OS account running its RMC node service. Different node IDs on the same machine can represent ordinary and root accounts. A credential grants the native authority of its allowed nodes; there are no directory or command allowlists. Select an online node and check its username and UID before remote tool calls. Long commands return a session ID; use write_stdin to collect output and terminate_process to stop them. A network failure does not roll back a command: query processes after reconnecting and do not blindly repeat side effects.",
 		Capabilities: &mcp.ServerCapabilities{
 			Tools: &mcp.ToolCapabilities{ListChanged: false},
 		},

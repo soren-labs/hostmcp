@@ -86,7 +86,7 @@ type deviceConn struct {
 	id      string
 	hash    string
 	info    protocol.Device
-	tools   toolSet // nil when the Agent did not advertise tool_args
+	tools   toolSet // nil when the node did not advertise tool_args
 	conn    *websocket.Conn
 	done    chan struct{}
 	once    sync.Once
@@ -140,7 +140,8 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		mux.HandleFunc("/.well-known/oauth-protected-resource", h.metadata)
 		mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", h.metadata)
 	}
-	mux.HandleFunc("/agent/", h.acceptAgent)
+	// Nodes connect on /agent/, their pre-v0.3 name, so every version interoperates.
+	mux.HandleFunc("/agent/", h.acceptNode)
 	mux.Handle("/enroll", h.bounded(h.enrollments, http.HandlerFunc(h.enroll)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -203,7 +204,7 @@ func auditPrincipal(p string) string {
 // audit logs an operational event at most once per auditEvery for each
 // event/endpoint/reason combination, and reports how many identical events
 // were suppressed since the previous line. Sampling per kind means a noisy
-// stale agent cannot hide MCP denials or capacity rejections. Keys are code
+// stale node cannot hide MCP denials or capacity rejections. Keys are code
 // constants, so the maps stay bounded. attrs are key/value pairs of
 // non-secret values; never pass tokens, hashes, request bodies or arguments.
 func (h *Hub) audit(event, endpoint, reason string, attrs ...string) {
@@ -455,7 +456,7 @@ func (h *Hub) enroll(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid enrollment request", 400)
 		return
 	}
-	agent, err := h.store.Redeem(input.DeviceID, input.Token)
+	enrolled, err := h.store.Redeem(input.DeviceID, input.Token)
 	if err != nil {
 		h.auditDenied("enroll", "invalid_or_expired_invitation")
 		http.Error(w, "invalid, expired, or already used invitation", 401)
@@ -463,10 +464,10 @@ func (h *Hub) enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("event=device_enrolled device=%q", input.DeviceID)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(agent)
+	_ = json.NewEncoder(w).Encode(enrolled)
 }
 
-func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
+func (h *Hub) acceptNode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", 405)
 		return
@@ -474,13 +475,13 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/agent/")
 	token := bearer(r)
 	if id == "" || strings.Contains(id, "/") || !h.store.AuthDevice(id, token) {
-		// A valid-looking node ID is not secret and identifies stale agents
+		// A valid-looking node ID is not secret and identifies stale nodes
 		// that keep retrying with a revoked or renamed credential.
 		device := "invalid"
 		if config.ValidID(id) {
 			device = id
 		}
-		h.auditDenied("agent", "invalid_credentials", "device", device)
+		h.auditDenied("node", "invalid_credentials", "device", device)
 		w.Header().Set("WWW-Authenticate", "Bearer realm=\"rmc-device\"")
 		http.Error(w, "invalid device credentials", 401)
 		return
@@ -510,7 +511,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid handshake")
 		return
 	}
-	if !validInfo(*hello.Device) || (hello.Device.Component != "" && hello.Device.Component != "agent") || (hello.Device.WireVersion != 0 && hello.Device.WireVersion != hello.Version) {
+	if !validInfo(*hello.Device) || (hello.Device.Component != "" && hello.Device.Component != "agent" && hello.Device.Component != "node") || (hello.Device.WireVersion != 0 && hello.Device.WireVersion != hello.Version) {
 		log.Printf("event=device_rejected device=%q reason=invalid_info", id)
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid device info")
 		return
@@ -527,7 +528,7 @@ func (h *Hub) acceptAgent(w http.ResponseWriter, r *http.Request) {
 	info.LastSeen = info.ConnectedAt
 	info.DisconnectedAt = time.Time{}
 	info.WireVersion = hello.Version
-	info.Component = "agent"
+	info.Component = "node"
 	d := &deviceConn{id: id, hash: config.Hash(token), info: info, tools: advertisedTools(hello.ToolArgs), conn: conn, done: make(chan struct{}), pending: map[string]chan protocol.Message{}}
 	h.mu.Lock()
 	old := h.connections[id]
@@ -753,7 +754,7 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		return protocol.Result{}, errors.New("device was revoked or its account binding changed; command was not dispatched")
 	}
 	if feature := h.unsupportedFeature(d, tool, args); feature != "" {
-		return protocol.Result{}, fmt.Errorf("device %s runs RMC Agent %s, which does not support %s; upgrade that Agent. Command was not dispatched", device, agentVersion(d), feature)
+		return protocol.Result{}, fmt.Errorf("device %s runs RMC node %s, which does not support %s; upgrade that node. Command was not dispatched", device, nodeVersion(d), feature)
 	}
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

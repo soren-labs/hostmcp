@@ -26,6 +26,7 @@ type Options struct {
 }
 
 func InstallWithOptions(name, role, configPath string, options Options) error {
+	role = NormalizeRole(role)
 	if !options.System {
 		if options.User != "" {
 			return errors.New("--user requires --system; user services run as the installing account")
@@ -251,19 +252,19 @@ func installSystem(name, role, configPath, username string) error {
 		if _, err = config.NewStore(abs).Snapshot(); err != nil {
 			return err
 		}
-	} else if role == "agent" {
-		var a config.Agent
+	} else if role == "node" {
+		var a config.Node
 		if err = config.ReadJSON(abs, &a); err != nil {
 			return err
 		}
 		if a.Version != config.FormatVersion || !config.ValidID(a.DeviceID) || len(a.Token) < 32 {
-			return errors.New("invalid agent configuration")
+			return errors.New("invalid node configuration")
 		}
 		if _, err = config.CheckURL(a.HubURL, a.AllowInsecure); err != nil {
 			return err
 		}
 	} else {
-		return errors.New("role must be hub or agent")
+		return errors.New("role must be hub or node")
 	}
 	info, err := os.Stat(abs)
 	if err != nil {

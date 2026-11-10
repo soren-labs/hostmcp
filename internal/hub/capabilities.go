@@ -8,9 +8,9 @@ import (
 	"github.com/soren-labs/rmc/internal/protocol"
 )
 
-// legacyToolArgs is the native tool surface of wire-v1 Agents that predate the
+// legacyToolArgs is the native tool surface of wire-v1 nodes (formerly Agents) that predate the
 // optional hello "tool_args" advertisement (HostMCP and RMC up to v0.2.4).
-// It is frozen: never add to it. Such Agents decode tool arguments strictly,
+// It is frozen: never add to it. Such nodes decode tool arguments strictly,
 // so a newer argument would fail there with a generic "unknown field" error,
 // and a newer tool name would fail as unknown.
 var legacyToolArgs = toolSetOf(map[string][]string{
@@ -26,7 +26,7 @@ var legacyToolArgs = toolSetOf(map[string][]string{
 })
 
 // postV1Tools names native tools added after legacyToolArgs was frozen. A Hub
-// never dispatches them to an Agent that did not advertise them. New argument
+// never dispatches them to a node that did not advertise them. New argument
 // names on legacy tools need no entry: they are detected from the frozen table.
 var postV1Tools = map[string]bool{"search": true}
 
@@ -49,8 +49,8 @@ func toolSetOf(m map[string][]string) toolSet {
 	return set
 }
 
-// advertisedTools validates an Agent's hello advertisement. A missing,
-// malformed or oversized advertisement yields nil, which means "legacy Agent".
+// advertisedTools validates a node's hello advertisement. A missing,
+// malformed or oversized advertisement yields nil, which means "legacy node".
 func advertisedTools(m map[string][]string) toolSet {
 	if len(m) == 0 || len(m) > maxAdvertisedTools {
 		return nil
@@ -69,15 +69,15 @@ func advertisedTools(m map[string][]string) toolSet {
 }
 
 // unsupportedFeature names a Hub-known native tool or argument that the target
-// Agent does not support, or returns "" when the call may be dispatched. Tools
-// and arguments unknown to this Hub are left for the Agent to accept or reject.
+// node does not support, or returns "" when the call may be dispatched. Tools
+// and arguments unknown to this Hub are left for the node to accept or reject.
 func (h *Hub) unsupportedFeature(d *deviceConn, tool string, args json.RawMessage) string {
 	known, ok := h.toolArgs[tool]
 	if !ok {
 		return ""
 	}
-	agentTools := d.tools
-	legacy := agentTools == nil
+	nodeTools := d.tools
+	legacy := nodeTools == nil
 	if legacy {
 		if postV1Tools[tool] {
 			return fmt.Sprintf("the %s tool", tool)
@@ -85,9 +85,9 @@ func (h *Hub) unsupportedFeature(d *deviceConn, tool string, args json.RawMessag
 		if _, native := legacyToolArgs[tool]; !native {
 			return ""
 		}
-		agentTools = legacyToolArgs
+		nodeTools = legacyToolArgs
 	}
-	have, ok := agentTools[tool]
+	have, ok := nodeTools[tool]
 	if !ok {
 		return fmt.Sprintf("the %s tool", tool)
 	}
@@ -108,7 +108,7 @@ func (h *Hub) unsupportedFeature(d *deviceConn, tool string, args json.RawMessag
 	return ""
 }
 
-func agentVersion(d *deviceConn) string {
+func nodeVersion(d *deviceConn) string {
 	if d.info.Version == "" {
 		return "an older version"
 	}

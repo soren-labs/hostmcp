@@ -181,3 +181,28 @@ func TestDefaultFileFallsBackToLegacyHostMCPDirectory(t *testing.T) {
 		t.Fatalf("both present default = %q, want %q", got, current)
 	}
 }
+
+func TestNodeConfigFallsBackToExistingAgentJSON(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	node := filepath.Join(home, ".config", "rmc", "node.json")
+	agent := filepath.Join(home, ".config", "rmc", "agent.json")
+	if got := nodeConfigFile(); got != node {
+		t.Fatalf("fresh install = %q, want %q", got, node)
+	}
+	if err := os.MkdirAll(filepath.Dir(agent), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agent, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := nodeConfigFile(); got != agent {
+		t.Fatalf("pre-v0.3 install = %q, want existing %q", got, agent)
+	}
+	if err := os.WriteFile(node, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := nodeConfigFile(); got != node {
+		t.Fatalf("both present = %q, want %q", got, node)
+	}
+}

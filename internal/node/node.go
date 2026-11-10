@@ -1,5 +1,7 @@
-// Package agent connects a native executor to a Hub without any inbound ports.
-package agent
+// Package node connects a native executor to a Hub without any inbound ports.
+// A node was called an Agent before v0.3; the wire protocol still uses
+// that word (the /agent/ path and the "agent" hello component).
+package node
 
 import (
 	"context"
@@ -29,12 +31,12 @@ const (
 // Run reconnects the transport while retaining the caller-owned executor. It
 // never resends a tool request. A disconnected reply is lost, but managed
 // processes remain queryable through the executor after reconnection.
-func Run(ctx context.Context, cfg config.Agent, executor protocol.Executor, info protocol.Device) error {
+func Run(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device) error {
 	return runWithHeartbeat(ctx, cfg, executor, info, heartbeatInterval, heartbeatTimeout)
 }
 
 // Keep heartbeat timing local to a run so tests do not mutate process-wide state.
-func runWithHeartbeat(ctx context.Context, cfg config.Agent, executor protocol.Executor, info protocol.Device, interval, timeout time.Duration) error {
+func runWithHeartbeat(ctx context.Context, cfg config.Node, executor protocol.Executor, info protocol.Device, interval, timeout time.Duration) error {
 	endpoint, err := endpointURL(cfg)
 	if err != nil {
 		return err
@@ -48,7 +50,7 @@ func runWithHeartbeat(ctx context.Context, cfg config.Agent, executor protocol.E
 	info.ID = cfg.DeviceID
 	info.Online = true
 	info.Version = protocol.Version
-	info.Component = "agent"
+	info.Component = "agent" // wire identifier; old Hubs accept only "agent"
 	info.WireVersion = protocol.WireVersion
 	slots := make(chan struct{}, maxConcurrentRequests)
 	seen := newRequestIDs()
@@ -91,9 +93,9 @@ func runWithHeartbeat(ctx context.Context, cfg config.Agent, executor protocol.E
 	}
 }
 
-func endpointURL(cfg config.Agent) (string, error) {
+func endpointURL(cfg config.Node) (string, error) {
 	if cfg.Version != config.FormatVersion {
-		return "", errors.New("unsupported agent configuration version")
+		return "", errors.New("unsupported node configuration version")
 	}
 	if !config.ValidID(cfg.DeviceID) {
 		return "", errors.New("invalid device ID")
@@ -142,7 +144,7 @@ func connect(ctx context.Context, endpoint, token string, executor protocol.Exec
 	helloCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	hello := protocol.Message{Type: "hello", Version: protocol.WireVersion, Device: &info}
 	if t, ok := executor.(interface{ Tools() []protocol.Tool }); ok {
-		// Lets the Hub refuse features this Agent lacks before dispatching.
+		// Lets the Hub refuse features this node lacks before dispatching.
 		hello.ToolArgs = protocol.ToolArgNames(t.Tools())
 	}
 	err = wsjson.Write(helloCtx, conn, hello)

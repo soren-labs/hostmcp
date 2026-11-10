@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build compatibility, Hub and Agent archives for four targets and SHA256SUMS. Does not push tags or publish.
+# Build compatibility, Hub and Node archives for four targets and SHA256SUMS. Does not push tags or publish.
 set -euo pipefail
 
 release_version="${1:-}"
@@ -69,7 +69,7 @@ PY
 for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
   target_os="${target%/*}"
   target_arch="${target#*/}"
-  for role in all hub agent; do
+  for role in all hub node; do
     executable=rmc
     if [[ "$role" != all ]]; then executable="rmc-$role"; fi
     package_dir="$temp_dir/${executable}_${target_os}_${target_arch}"
@@ -84,17 +84,6 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
     cp -R "$temp_dir/licenses" "$package_dir/licenses"
     COPYFILE_DISABLE=1 tar -C "$package_dir" -czf "$output_dir/${executable}_${release_version}_${target_os}_${target_arch}.tar.gz" \
       "$executable" LICENSE README.md README.zh-CN.md docs licenses
-    if [[ "$role" == agent ]]; then
-      # Agents released as HostMCP (v0.2.x) self-update from hostmcp-agent_*
-      # archives that contain a hostmcp-agent binary. Ship the same RMC agent
-      # under that legacy name so they can cross the rename in place.
-      legacy_dir="$temp_dir/hostmcp-agent_${target_os}_${target_arch}"
-      mkdir -p "$legacy_dir"
-      cp "$package_dir/$executable" "$legacy_dir/hostmcp-agent"
-      cp -R "$package_dir/LICENSE" "$package_dir/README.md" "$package_dir/README.zh-CN.md" "$package_dir/docs" "$package_dir/licenses" "$legacy_dir/"
-      COPYFILE_DISABLE=1 tar -C "$legacy_dir" -czf "$output_dir/hostmcp-agent_${release_version}_${target_os}_${target_arch}.tar.gz" \
-        hostmcp-agent LICENSE README.md README.zh-CN.md docs licenses
-    fi
   done
 done
 
@@ -105,7 +94,7 @@ import sys
 
 folder = pathlib.Path(sys.argv[1])
 version = sys.argv[2]
-names = [f"{component}_{version}_{os}_{arch}.tar.gz" for component in ("rmc", "rmc-hub", "rmc-agent", "hostmcp-agent") for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
+names = [f"{component}_{version}_{os}_{arch}.tar.gz" for component in ("rmc", "rmc-hub", "rmc-node") for os in ("darwin", "linux") for arch in ("amd64", "arm64")]
 lines = []
 for name in names:
     digest = hashlib.sha256()
