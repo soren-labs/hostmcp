@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -33,6 +34,11 @@ type SearchInput struct {
 	MaxDepth        *int     `json:"max_depth,omitempty"`
 	MaxResults      *int     `json:"max_results,omitempty"`
 	MaxBytes        *int     `json:"max_bytes,omitempty"`
+	// ContextLines returns up to this many lines around each match.
+	ContextLines *int `json:"context_lines,omitempty"`
+	// IncludeDependencies descends the dependency and cache directories that
+	// are skipped by default (see dependencyDir).
+	IncludeDependencies bool `json:"include_dependencies,omitempty"`
 }
 
 const (
@@ -41,11 +47,45 @@ const (
 	searchTimeBudget  = 20 * time.Second
 	searchLineBytes   = 512
 	searchBinaryProbe = 8192
+	// searchSkippedListed bounds how many default-skipped directories are
+	// named in the result; all of them are counted.
+	searchSkippedListed = 20
 )
+
+// dependencyDirNames are directories of installed dependencies or generated
+// caches that are rarely what a search is after and often hold more entries
+// than the rest of a project together.
+var dependencyDirNames = map[string]bool{"node_modules": true, "bower_components": true, "__pycache__": true}
+
+// cacheDirSignature starts a CACHEDIR.TAG file (https://bford.info/cachedir/),
+// which Cargo writes into target/ and many tools write into their caches.
+const cacheDirSignature = "Signature: 8a477f597d28d172789f06886806bc55"
+
+// dependencyDir reports whether a directory below the search root is skipped
+// by default: a well-known dependency directory name, a Python virtual
+// environment (pyvenv.cfg) or a tagged cache directory (CACHEDIR.TAG).
+func dependencyDir(full, name string) bool {
+	if dependencyDirNames[name] {
+		return true
+	}
+	if info, err := os.Lstat(filepath.Join(full, "pyvenv.cfg")); err == nil && info.Mode().IsRegular() {
+		return true
+	}
+	f, err := openRegular(filepath.Join(full, "CACHEDIR.TAG"), os.O_RDONLY, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, len(cacheDirSignature))
+	n, _ := io.ReadFull(f, head)
+	return string(head[:n]) == cacheDirSignature
+}
 
 type searchStats struct {
 	visitedFiles, visitedDirs, matchedFiles int
 	binary, tooLarge, unreadable, symlinks  int
+	dependencyDirs                          int
+	dependencyPaths                         []string
 }
 
 var errSearchStop = errors.New("search limit reached")
@@ -63,10 +103,15 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 	if err != nil {
 		return protocol.Result{}, err
 	}
+	contextLines, err := bounds(in.ContextLines, 0, 0, 10, "context_lines")
+	if err != nil {
+		return protocol.Result{}, err
+	}
 	if len(in.Pattern) > 4096 || len(in.Glob) > 1024 || len(in.Exclude) > 32 {
 		return protocol.Result{}, errors.New("pattern is limited to 4096 bytes, glob to 1024 bytes and exclude to 32 entries")
 	}
 	var re *regexp.Regexp
+	anchored := false
 	if in.Pattern != "" {
 		expr := in.Pattern
 		if in.Literal {
@@ -78,6 +123,7 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 		if re, err = regexp.Compile(expr); err != nil {
 			return protocol.Result{}, fmt.Errorf("invalid pattern: %w", err)
 		}
+		anchored = hasAnchors(expr)
 	}
 	for _, g := range append([]string{in.Glob}, in.Exclude...) {
 		if err := validGlob(g); err != nil {
@@ -149,10 +195,24 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 		}
 		if isDir {
 			st.visitedDirs++
+			// The root itself is never skipped, so naming a dependency
+			// directory as path searches it.
+			skip := rel != "." && !in.IncludeDependencies && dependencyDir(full, d.Name())
 			if re == nil && rel != "." && matchGlob(in.Glob, rel) {
-				if err := add(map[string]any{"path": rel, "type": "directory"}, len(rel)+40); err != nil {
+				item := map[string]any{"path": rel, "type": "directory"}
+				if skip {
+					item["contents_skipped"] = true
+				}
+				if err := add(item, len(rel)+60); err != nil {
 					return err
 				}
+			}
+			if skip {
+				st.dependencyDirs++
+				if len(st.dependencyPaths) < searchSkippedListed {
+					st.dependencyPaths = append(st.dependencyPaths, rel)
+				}
+				return filepath.SkipDir
 			}
 			// Entries below a directory at max_depth would be deeper.
 			if rel != "." && depth(rel) >= maxDepth {
@@ -183,7 +243,7 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		return searchFile(full, rel, re, &st, add)
+		return searchFile(full, rel, re, anchored, contextLines, &st, add)
 	}
 	if rootInfo.IsDir() {
 		err = filepath.WalkDir(root, visit)
@@ -200,7 +260,12 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 		"truncated":     reason != "",
 		"skipped": map[string]int{
 			"binary": st.binary, "too_large": st.tooLarge, "unreadable": st.unreadable, "symlinks": st.symlinks,
+			"dependency_dirs": st.dependencyDirs,
 		},
+	}
+	if st.dependencyDirs > 0 {
+		// Name them so a caller knows where else to look.
+		out["skipped_dependency_dirs"] = st.dependencyPaths
 	}
 	if reason != "" {
 		out["truncated_reason"] = reason
@@ -222,8 +287,12 @@ func (r *Runtime) search(ctx context.Context, in SearchInput) (protocol.Result, 
 // searchFile reports matching lines of one regular file. It opens without
 // blocking (a path swapped for a FIFO cannot hang the call), skips binary and
 // oversized files, and runs the expression over the whole file first so most
-// non-matching files cost a single pass.
-func searchFile(full, rel string, re *regexp.Regexp, st *searchStats, add func(map[string]any, int) error) error {
+// non-matching files cost a single pass. That pass is skipped for anchored
+// patterns: over the whole file, ^ and $ would match only at its start and
+// end, not at each line. With contextLines, each match also
+// carries the lines around it; lines already returned with the previous
+// match are not repeated, and trailing context stops before the next match.
+func searchFile(full, rel string, re *regexp.Regexp, anchored bool, contextLines int, st *searchStats, add func(map[string]any, int) error) error {
 	f, err := openRegular(full, os.O_RDONLY, 0)
 	if err != nil {
 		st.unreadable++
@@ -243,34 +312,100 @@ func searchFile(full, rel string, re *regexp.Regexp, st *searchStats, add func(m
 		st.binary++
 		return nil
 	}
-	if !re.Match(data) {
+	if !anchored && !re.Match(data) {
 		return nil
 	}
-	st.matchedFiles++
-	for n, rest := 1, data; len(rest) > 0; n++ {
+	var lines [][]byte
+	for rest := data; len(rest) > 0; {
 		line := rest
 		if i := bytes.IndexByte(rest, '\n'); i >= 0 {
 			line, rest = rest[:i], rest[i+1:]
 		} else {
 			rest = nil
 		}
-		line = bytes.TrimSuffix(line, []byte("\r"))
-		if !re.Match(line) {
-			continue
+		lines = append(lines, bytes.TrimSuffix(line, []byte("\r")))
+	}
+	var matches []int
+	for i, line := range lines {
+		if re.Match(line) {
+			matches = append(matches, i)
 		}
-		text, cut := line, false
-		if len(text) > searchLineBytes {
-			text, cut = text[:completeUTF8Prefix(text[:searchLineBytes])], true
-		}
-		item := map[string]any{"path": rel, "line": n, "text": strings.ToValidUTF8(string(text), string(utf8.RuneError))}
+	}
+	if len(matches) == 0 {
+		return nil
+	}
+	st.matchedFiles++
+	returned := -1 // index of the last line already returned for this file
+	for k, i := range matches {
+		text, cut := searchLine(lines[i])
+		item := map[string]any{"path": rel, "line": i + 1, "text": text}
 		if cut {
 			item["text_truncated"] = true
 		}
-		if err := add(item, len(rel)+len(text)+40); err != nil {
+		cost := len(rel) + len(text) + 40
+		if contextLines > 0 {
+			last := min(i+contextLines, len(lines)-1)
+			if k+1 < len(matches) {
+				last = min(last, matches[k+1]-1)
+			}
+			before, cutB, n := searchContext(lines[max(i-contextLines, returned+1):i])
+			after, cutA, m := searchContext(lines[i+1 : last+1])
+			item["before"], item["after"] = before, after
+			if cutB || cutA {
+				item["context_truncated"] = true
+			}
+			cost += n + m
+			returned = last
+		}
+		if err := add(item, cost); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// searchLine returns a line as valid UTF-8 text of at most searchLineBytes.
+func searchLine(line []byte) (string, bool) {
+	cut := false
+	if len(line) > searchLineBytes {
+		line, cut = line[:completeUTF8Prefix(line[:searchLineBytes])], true
+	}
+	return strings.ToValidUTF8(string(line), string(utf8.RuneError)), cut
+}
+
+func searchContext(lines [][]byte) ([]string, bool, int) {
+	out := make([]string, 0, len(lines))
+	cut, cost := false, 0
+	for _, l := range lines {
+		text, c := searchLine(l)
+		out = append(out, text)
+		cut = cut || c
+		cost += len(text) + 4
+	}
+	return out, cut, cost
+}
+
+// hasAnchors reports whether an expression uses ^, $, \A or \z, whose meaning
+// differs between one line and a whole file.
+func hasAnchors(expr string) bool {
+	tree, err := syntax.Parse(expr, syntax.Perl)
+	if err != nil {
+		return true
+	}
+	var walk func(*syntax.Regexp) bool
+	walk = func(n *syntax.Regexp) bool {
+		switch n.Op {
+		case syntax.OpBeginLine, syntax.OpEndLine, syntax.OpBeginText, syntax.OpEndText:
+			return true
+		}
+		for _, sub := range n.Sub {
+			if walk(sub) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(tree)
 }
 
 func relSlash(root, full string) string {

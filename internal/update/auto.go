@@ -502,8 +502,16 @@ func (u *Updater) install(ctx context.Context, c candidate, asset ghAsset, diges
 	switch onDisk.Version {
 	case u.Current:
 	case c.version.String():
-		u.logf("event=auto_update outcome=already_installed version=%q action=restart", onDisk.Version)
+		// Another process sharing this executable, an operator or an earlier
+		// failed restart already installed the candidate. The restart still
+		// ends this service's sessions, so wait for idle as a fresh install
+		// does. The lock is released first: nothing is replaced here.
 		guard.Close()
+		u.waitIdle(ctx)
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		u.logf("event=auto_update outcome=already_installed version=%q action=restart", onDisk.Version)
 		return u.Restart()
 	default:
 		return fmt.Errorf("%s on disk is version %s but %s is running; restart the service first", u.Binary, onDisk.Version, u.Current)

@@ -30,7 +30,13 @@ type ReadInput struct {
 	EndLine   int      `json:"end_line,omitempty"`
 	MaxBytes  *int     `json:"max_bytes,omitempty"`
 	Encoding  string   `json:"encoding,omitempty"`
+	// TailLines reads the last lines of a text file backward from its end, so
+	// files of any size can be tailed.
+	TailLines int `json:"tail_lines,omitempty"`
 }
+
+const maxTailLines = 100000
+
 type WriteInput struct {
 	Path          string `json:"path"`
 	Content       string `json:"content"`
@@ -156,6 +162,12 @@ func (r *Runtime) read(in ReadInput) (protocol.Result, error) {
 	if in.Encoding != "utf8" && in.Encoding != "base64" {
 		return protocol.Result{}, errors.New("encoding must be utf8 or base64")
 	}
+	if in.TailLines < 0 || in.TailLines > maxTailLines {
+		return protocol.Result{}, fmt.Errorf("tail_lines must be between 1 and %d", maxTailLines)
+	}
+	if in.TailLines > 0 && (in.StartLine != 1 || in.EndLine != 0 || in.Encoding != "utf8") {
+		return protocol.Result{}, errors.New("tail_lines cannot be combined with start_line, end_line or encoding=base64")
+	}
 	entries := make([]map[string]any, 0, len(in.Paths))
 	for _, value := range in.Paths {
 		path, e := r.path(value, in.Cwd)
@@ -235,6 +247,9 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 		return nil, 0, err
 	}
 	defer f.Close()
+	if in.TailLines > 0 {
+		return readTail(f, entry, info.Size(), in.TailLines, budget)
+	}
 	if in.Encoding == "base64" {
 		b, err := io.ReadAll(io.LimitReader(f, int64(budget)+1))
 		if err != nil {
@@ -318,6 +333,86 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 	entry["scanned_bytes"] = scanned
 	entry["invalid_utf8_replaced"] = !utf8.Valid(data)
 	return withSHA256(entry, f, info.Size()), len(data), nil
+}
+
+// readTail returns the last n lines of a text file. It reads backward from
+// the size observed when the file was opened, at most budget bytes plus one
+// block, so it is bounded however large the file is and ignores data
+// appended meanwhile. A final newline ends the last line rather than starting
+// an empty one. When the lines do not fit in budget, the newest whole lines
+// that fit are returned (or, for a single longer line, its end).
+func readTail(f *os.File, entry map[string]any, size int64, n, budget int) (map[string]any, int, error) {
+	const block = 64 << 10
+	end := size
+	var buf []byte               // the bytes from end-len(buf) to end
+	lines, start := 0, int64(-1) // start: offset where the returned lines begin
+	skipFinal := true
+	for pos := end; pos > 0 && start < 0; {
+		chunk := int64(block)
+		if pos < chunk {
+			chunk = pos
+		}
+		pos -= chunk
+		b := make([]byte, chunk)
+		if m, err := f.ReadAt(b, pos); m < len(b) {
+			if err == nil || err == io.EOF {
+				err = errors.New("file shrank while it was read")
+			}
+			return nil, 0, err
+		}
+		if bytes.IndexByte(b, 0) >= 0 {
+			entry["binary"] = true
+			entry["note"] = "NUL bytes detected; use encoding=base64 for binary content"
+			entry["truncated"] = false
+			return withSHA256(entry, f, size), 0, nil
+		}
+		buf = append(b, buf...)
+		for i := len(b) - 1; i >= 0; i-- {
+			if b[i] != '\n' {
+				continue
+			}
+			if skipFinal && pos+int64(i) == end-1 {
+				continue
+			}
+			lines++
+			if lines == n {
+				start = pos + int64(i) + 1
+				break
+			}
+		}
+		skipFinal = false
+		if len(buf) > budget && start < 0 {
+			break
+		}
+	}
+	if start < 0 && int64(len(buf)) == end {
+		start = 0 // the whole file has n lines or fewer
+	}
+	truncated := false
+	if start < 0 || end-start > int64(budget) {
+		// Keep the newest whole lines that fit.
+		truncated = true
+		start = end - int64(budget)
+		data := buf[int64(len(buf))-int64(budget):]
+		if i := bytes.IndexByte(data, '\n'); i >= 0 && i < len(data)-1 {
+			start += int64(i) + 1
+		}
+	}
+	data := buf[int64(len(buf))-(end-start):]
+	for len(data) > 0 && !utf8.RuneStart(data[0]) {
+		data, start = data[1:], start+1
+	}
+	count := bytes.Count(data, []byte{'\n'})
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		count++
+	}
+	entry["encoding"] = "utf8"
+	entry["content"] = strings.ToValidUTF8(string(data), "\uFFFD")
+	entry["lines"] = count
+	entry["start_offset"] = start
+	entry["truncated"] = truncated
+	entry["invalid_utf8_replaced"] = !utf8.Valid(data)
+	return withSHA256(entry, f, size), len(data), nil
 }
 
 func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {

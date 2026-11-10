@@ -497,3 +497,38 @@ func TestHubRejectsMismatchedAccountEvenIfNodeOmitsLocalBinding(t *testing.T) {
 		t.Fatalf("mismatched account welcomed: %+v %v", welcome, err)
 	}
 }
+
+func TestDeviceErrorsNameTheClientsDevices(t *testing.T) {
+	h, srv, store := fixture(t)
+	if err := store.Update(func(c *config.Hub) error {
+		c.Clients[0].Devices = []string{"dev1", "dev3"}
+		c.Devices = append(c.Devices, config.Device{ID: "dev3", TokenHash: config.Hash(strings.Repeat("f", 43))})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stop := startAgent(t, srv.URL, &recordingExecutor{})
+	eventually(t, func() bool {
+		list, err := h.ListDevices(context.Background(), "alice")
+		return err == nil && len(list) == 2 && list[0].Online
+	})
+	_, err := h.Call(context.Background(), "alice", "dev2", "echo", json.RawMessage(`{"text":"x"}`))
+	if err == nil || !strings.Contains(err.Error(), `not authorized for device "dev2"`) || !strings.Contains(err.Error(), "online: dev1; offline: dev3.") {
+		t.Fatalf("unauthorized: %v", err)
+	}
+	_, err = h.Call(context.Background(), "alice", "dev3", "echo", json.RawMessage(`{"text":"x"}`))
+	if err == nil || !strings.Contains(err.Error(), `device "dev3" is offline; command was not dispatched`) || !strings.Contains(err.Error(), "online: dev1;") {
+		t.Fatalf("never connected: %v", err)
+	}
+	// bob's hint names only his own device.
+	_, err = h.Call(context.Background(), "bob", "dev1", "echo", json.RawMessage(`{"text":"x"}`))
+	if err == nil || strings.Contains(err.Error(), "dev1;") || !strings.Contains(err.Error(), "online: none; offline: dev2.") {
+		t.Fatalf("bob: %v", err)
+	}
+	stop()
+	eventually(t, func() bool { h.mu.RLock(); defer h.mu.RUnlock(); return h.connections["dev1"] == nil })
+	_, err = h.Call(context.Background(), "alice", "dev1", "echo", json.RawMessage(`{"text":"x"}`))
+	if err == nil || !strings.Contains(err.Error(), `device "dev1" is offline since 20`) || !strings.Contains(err.Error(), "online: none; offline: dev1, dev3.") {
+		t.Fatalf("disconnected: %v", err)
+	}
+}

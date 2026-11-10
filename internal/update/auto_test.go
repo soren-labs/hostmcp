@@ -235,6 +235,41 @@ func TestAutoUpdateInstallsSignedReleaseAndRestarts(t *testing.T) {
 	}
 }
 
+// When the candidate is already on disk (another process sharing the
+// executable installed it, or an earlier restart failed), only the restart is
+// missing; it must still wait until the service is idle.
+func TestAutoUpdateAlreadyInstalledWaitsForIdle(t *testing.T) {
+	priv, pub := testKey(t)
+	u, restarts := autoFixture(t, "0.3.0", priv, pub, signedRelease(t, priv, "0.3.1", false))
+	if err := os.WriteFile(u.Binary, testBinary("0.3.1", "node", 1), 0700); err != nil {
+		t.Fatal(err)
+	}
+	busy := atomic.Bool{}
+	busy.Store(true)
+	u.Idle = func() bool { return !busy.Load() }
+	var busyAtRestart atomic.Bool
+	u.Restart = func() error { busyAtRestart.Store(busy.Load()); restarts.Add(1); return nil }
+	go func() { time.Sleep(80 * time.Millisecond); busy.Store(false) }()
+	if _, err := u.Check(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if restarts.Load() != 1 || busyAtRestart.Load() {
+		t.Fatalf("restarts=%d busy at restart=%v", restarts.Load(), busyAtRestart.Load())
+	}
+
+	// A service that stops while waiting does not restart.
+	u2, restarts2 := autoFixture(t, "0.3.0", priv, pub, signedRelease(t, priv, "0.3.1", false))
+	if err := os.WriteFile(u2.Binary, testBinary("0.3.1", "node", 1), 0700); err != nil {
+		t.Fatal(err)
+	}
+	u2.Idle = func() bool { return false }
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+	if _, err := u2.Check(ctx, true); err == nil || restarts2.Load() != 0 {
+		t.Fatalf("canceled wait: err=%v restarts=%d", err, restarts2.Load())
+	}
+}
+
 func TestAutoUpdateRefusesUnsignedTamperedAndUntrusted(t *testing.T) {
 	priv, pub := testKey(t)
 	otherPriv, _ := testKey(t)

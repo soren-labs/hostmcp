@@ -719,6 +719,44 @@ func (h *Hub) ListDevices(_ context.Context, principal string) ([]protocol.Devic
 	sort.Slice(devices, func(i, j int) bool { return devices[i].ID < devices[j].ID })
 	return devices, nil
 }
+
+// maxDevicesHint bounds how many devices an error message names.
+const maxDevicesHint = 20
+
+// devicesHint names the devices a client may use and whether each is online,
+// so a caller that guessed a device ID can correct it without another
+// list_devices round trip. It reveals nothing list_devices would not.
+func (h *Hub) devicesHint(cfg config.Hub, client config.Client) string {
+	var online, offline []string
+	h.mu.RLock()
+	for _, entry := range cfg.Devices {
+		if !config.Allows(client, entry.ID) {
+			continue
+		}
+		if _, ok := h.connections[entry.ID]; ok {
+			online = append(online, entry.ID)
+		} else {
+			offline = append(offline, entry.ID)
+		}
+	}
+	h.mu.RUnlock()
+	if len(online)+len(offline) == 0 {
+		return "This client may use no devices."
+	}
+	sort.Strings(online)
+	sort.Strings(offline)
+	list := func(ids []string) string {
+		if len(ids) == 0 {
+			return "none"
+		}
+		if len(ids) > maxDevicesHint {
+			return fmt.Sprintf("%s and %d more", strings.Join(ids[:maxDevicesHint], ", "), len(ids)-maxDevicesHint)
+		}
+		return strings.Join(ids, ", ")
+	}
+	return fmt.Sprintf("Devices this client may use: online: %s; offline: %s.", list(online), list(offline))
+}
+
 func (h *Hub) Call(ctx context.Context, principal, device, tool string, args json.RawMessage) (result protocol.Result, err error) {
 	start := time.Now()
 	requestID := "not_dispatched"
@@ -745,13 +783,18 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		return protocol.Result{}, err
 	}
 	if !config.Allows(client, device) {
-		return protocol.Result{}, errors.New("client is not authorized for this device")
+		return protocol.Result{}, fmt.Errorf("client is not authorized for device %q; command was not dispatched. %s", device, h.devicesHint(cfg, client))
 	}
 	h.mu.RLock()
 	d := h.connections[device]
+	seen := h.known[device].DisconnectedAt
 	h.mu.RUnlock()
 	if d == nil {
-		return protocol.Result{}, errors.New("device is offline; command was not dispatched")
+		when := ""
+		if !seen.IsZero() {
+			when = " since " + seen.UTC().Format(time.RFC3339)
+		}
+		return protocol.Result{}, fmt.Errorf("device %q is offline%s; command was not dispatched. %s", device, when, h.devicesHint(cfg, client))
 	}
 	if !cfg.DeviceValidForUser(d.id, d.hash, d.info.Username) {
 		d.close()

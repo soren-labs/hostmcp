@@ -87,7 +87,17 @@ are generated from the matching section of this file.
 - `write_file.expected_sha256` (with `overwrite: true`) replaces a file only if
   its current content still has that hash. Otherwise nothing is written, and
   the error reports the current hash.
-- All new arguments are optional; omitting them keeps the previous behavior.
+- `search.context_lines` (0–10) returns the lines before and after each match
+  as `before` and `after` arrays, so a match can be edited with `apply_patch`
+  without another `read`. Lines already returned for the previous match are not
+  repeated, and `after` stops before the next match.
+- `read.tail_lines` returns the last N lines of a text file by reading backward
+  from its end, so logs larger than 16 MiB can be tailed without
+  `exec_command`. It reports `lines` and `start_offset`; when the lines exceed
+  `max_bytes`, the newest whole lines that fit are returned with
+  `truncated: true`.
+- All new arguments are optional; omitting them keeps the previous behavior,
+  except for the `search` default below.
 - Piped enrollment: `rmc device invite --output -` writes the invitation to
   stdout, and `rmc node enroll --invite -` reads it from stdin. A device can be
   added in one pipeline without leaving a credential file on either machine.
@@ -102,6 +112,17 @@ are generated from the matching section of this file.
 
 ### Changed
 
+- `search` no longer descends dependency and cache directories below `path`:
+  `node_modules`, `bower_components`, `__pycache__`, Python virtual
+  environments (a `pyvenv.cfg` file) and directories tagged with
+  `CACHEDIR.TAG`, such as Cargo's `target`. The result counts them in
+  `skipped.dependency_dirs` and names up to 20 in `skipped_dependency_dirs`;
+  file listings still show the directory, with `contents_skipped: true`. Set
+  `include_dependencies` to search them, or name one as `path`.
+- When a tool call names a device the client may not use, or one that is
+  offline, the error now lists the devices this client may use and which are
+  online (and, for a disconnected node, since when), so a client can correct
+  the device without another `list_devices` call.
 - Nodes advertise their native tools and argument names in an optional
   `tool_args` hello field. Before dispatch, a Hub refuses a native tool or
   argument that the target node does not support, with an "upgrade that node.
@@ -109,6 +130,17 @@ are generated from the matching section of this file.
   older) are checked against a fixed table. Wire version stays 1, and older
   Hubs ignore the field. Using the new tools or arguments through a new Hub
   requires upgrading that node.
+
+### Fixed
+
+- `search` with an anchored pattern such as `^func` or `;$` matched only on
+  the first or last line of a file, because a whole-file pre-check applied
+  `^` and `$` to the whole file. Anchored patterns now skip that pre-check and
+  match at every line.
+- An automatic update whose new version was already on disk (installed by
+  another service sharing the executable, by hand, or by an earlier check
+  whose restart failed) restarted at once, ending running sessions. It now
+  waits until the service is idle, like any other update.
 
 ### Performance
 
