@@ -33,6 +33,9 @@ type ReadInput struct {
 	// TailLines reads the last lines of a text file backward from its end, so
 	// files of any size can be tailed.
 	TailLines int `json:"tail_lines,omitempty"`
+	// Offset starts a base64 read at this byte, so files larger than one
+	// response can be read in chunks.
+	Offset int64 `json:"offset,omitempty"`
 }
 
 const maxTailLines = 100000
@@ -48,6 +51,11 @@ type WriteInput struct {
 	// ExpectedSHA256 makes an overwrite conditional on the file's current
 	// content, so stale context cannot clobber a newer edit.
 	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+	// Append adds content to the end of an existing file. ExpectedSize makes
+	// it conditional on the file's current size, so a repeated chunk of a
+	// chunked upload is refused instead of written twice.
+	Append       bool   `json:"append,omitempty"`
+	ExpectedSize *int64 `json:"expected_size,omitempty"`
 }
 type ImageInput struct {
 	Path string `json:"path"`
@@ -168,6 +176,9 @@ func (r *Runtime) read(in ReadInput) (protocol.Result, error) {
 	if in.TailLines > 0 && (in.StartLine != 1 || in.EndLine != 0 || in.Encoding != "utf8") {
 		return protocol.Result{}, errors.New("tail_lines cannot be combined with start_line, end_line or encoding=base64")
 	}
+	if in.Offset < 0 || in.Offset > 0 && in.Encoding != "base64" {
+		return protocol.Result{}, errors.New("offset must be zero or more and applies only to encoding=base64")
+	}
 	entries := make([]map[string]any, 0, len(in.Paths))
 	for _, value := range in.Paths {
 		path, e := r.path(value, in.Cwd)
@@ -251,6 +262,13 @@ func readPath(path string, in ReadInput, budget int) (map[string]any, int, error
 		return readTail(f, entry, info.Size(), in.TailLines, budget)
 	}
 	if in.Encoding == "base64" {
+		if in.Offset > info.Size() {
+			return nil, 0, fmt.Errorf("offset %d is beyond the end of %s (%d bytes)", in.Offset, path, info.Size())
+		}
+		if _, err := f.Seek(in.Offset, io.SeekStart); err != nil {
+			return nil, 0, err
+		}
+		entry["offset"] = in.Offset
 		b, err := io.ReadAll(io.LimitReader(f, int64(budget)+1))
 		if err != nil {
 			return nil, 0, err
@@ -443,6 +461,15 @@ func (r *Runtime) writeFile(in WriteInput) (protocol.Result, error) {
 		}
 		mode = os.FileMode(n)
 	}
+	if in.Append {
+		if in.Overwrite || in.CreateParents || in.ExpectedSHA256 != "" || in.Mode != "" {
+			return protocol.Result{}, errors.New("append adds to an existing file and cannot be combined with overwrite, create_parents, expected_sha256 or mode")
+		}
+		return appendFile(path, content, in.ExpectedSize)
+	}
+	if in.ExpectedSize != nil {
+		return protocol.Result{}, errors.New("expected_size applies only with append=true")
+	}
 	if in.CreateParents {
 		if err = os.MkdirAll(nativeDir(path), 0755); err != nil {
 			return protocol.Result{}, err
@@ -513,6 +540,43 @@ func replaceVerified(path string, content []byte, expected string, overwrite boo
 		return protocol.Result{}, fmt.Errorf("close %s after writing %d bytes: %w", path, n, closeErr)
 	}
 	return protocol.JSONResult(map[string]any{"path": path, "written_bytes": n, "sha256": fmt.Sprintf("%x", sha256.Sum256(content)), "previous_sha256": current}), nil
+}
+
+// appendFile adds content to the end of an existing regular file. With
+// expected, nothing is written unless the file has exactly that size. The
+// result reports the new size and, up to hashLimit, the whole file's sha256.
+func appendFile(path string, content []byte, expected *int64) (protocol.Result, error) {
+	if expected != nil && *expected < 0 {
+		return protocol.Result{}, errors.New("expected_size must be zero or more")
+	}
+	f, err := openRegular(path, os.O_RDWR|os.O_APPEND, 0)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return protocol.Result{}, fmt.Errorf("%s does not exist; append adds to an existing file, so create it with write_file first", path)
+		}
+		return protocol.Result{}, err
+	}
+	info, err := f.Stat()
+	if err == nil && expected != nil && info.Size() != *expected {
+		err = fmt.Errorf("%s has %d bytes, not the expected_size %d. Nothing was written", path, info.Size(), *expected)
+	}
+	if err != nil {
+		f.Close()
+		return protocol.Result{}, err
+	}
+	n, writeErr := f.Write(content)
+	if writeErr != nil {
+		f.Close()
+		return protocol.Result{}, fmt.Errorf("append to %s failed after %d bytes: %w", path, n, writeErr)
+	}
+	out := map[string]any{"path": path, "written_bytes": n, "size": info.Size() + int64(n)}
+	if sum, ok, err := fileSHA256(f); err == nil && ok {
+		out["sha256"] = sum
+	}
+	if err := f.Close(); err != nil {
+		return protocol.Result{}, fmt.Errorf("close %s after appending %d bytes: %w", path, n, err)
+	}
+	return protocol.JSONResult(out), nil
 }
 
 func (r *Runtime) viewImage(in ImageInput) (protocol.Result, error) {

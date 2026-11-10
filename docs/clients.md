@@ -87,8 +87,9 @@ rmc call --url https://mcp.example.com/mcp \
 同一个认证主体。完整输入 schema 以客户端通过 tools/list 得到的内容为准。
 
 设备工具包括 device_info、exec_command、write_stdin、list_processes、
-terminate_process、read、search、write_file、apply_patch、view_image。view_image 是
-读取已有图片文件，不是屏幕捕获或桌面控制。
+terminate_process、read、search、write_file、move_path、apply_patch、view_image。view_image 是
+读取已有图片文件，不是屏幕捕获或桌面控制。远程 Hub 另外提供 list_devices 和
+transfer_file（不带 device 参数，用 source_device/target_device 指定两端）。
 
 ## 给不同客户端分配 token
 
@@ -238,6 +239,7 @@ OAuth JWT access token issuer。此功能仅改 Hub，真实 ChatGPT 登录仍�
       mcp__rmc__list_processes mcp__rmc__terminate_process \
       mcp__rmc__read mcp__rmc__search mcp__rmc__write_file \
       mcp__rmc__apply_patch mcp__rmc__view_image \
+      mcp__rmc__move_path mcp__rmc__transfer_file \
     --setting-sources '' --disable-slash-commands --no-chrome \
     --no-session-persistence --permission-mode dontAsk \
     --max-budget-usd 0.5 --output-format stream-json --verbose \

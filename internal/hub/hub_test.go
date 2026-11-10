@@ -191,7 +191,7 @@ func TestSDKProtocolVersionsAndScopes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(tools.Tools) != 2 {
+			if len(tools.Tools) != 3 { // echo, transfer_file and list_devices
 				t.Fatalf("tools=%d", len(tools.Tools))
 			}
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"device": "dev1", "text": "hello"}})
@@ -530,5 +530,47 @@ func TestDeviceErrorsNameTheClientsDevices(t *testing.T) {
 	_, err = h.Call(context.Background(), "alice", "dev1", "echo", json.RawMessage(`{"text":"x"}`))
 	if err == nil || !strings.Contains(err.Error(), `device "dev1" is offline since 20`) || !strings.Contains(err.Error(), "online: none; offline: dev1, dev3.") {
 		t.Fatalf("disconnected: %v", err)
+	}
+}
+
+// Canceling a call while its request frame is being written must not close
+// the node's connection, which would fail every other call on that node.
+type quietExecutor struct{}
+
+func (quietExecutor) Close() error { return nil }
+func (quietExecutor) Call(context.Context, string, string, json.RawMessage) (protocol.Result, error) {
+	return protocol.JSONResult(map[string]any{"ok": true}), nil
+}
+
+func TestCancelDuringDispatchKeepsConnection(t *testing.T) {
+	h, srv, _ := fixture(t)
+	startAgent(t, srv.URL, quietExecutor{})
+	eventually(t, func() bool { return online(h) })
+	h.mu.RLock()
+	original := h.connections["dev1"]
+	h.mu.RUnlock()
+	args, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", 2<<20)})
+	for i := 0; i < 15; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _, _ = h.Call(ctx, "alice", "dev1", "echo", args) }()
+		time.Sleep(time.Duration(i*150) * time.Microsecond)
+		cancel()
+		<-done
+	}
+	time.Sleep(100 * time.Millisecond)
+	h.mu.RLock()
+	current := h.connections["dev1"]
+	h.mu.RUnlock()
+	if current != original {
+		t.Fatal("a canceled call closed the node connection")
+	}
+	select {
+	case <-original.done:
+		t.Fatal("a canceled call closed the node connection")
+	default:
+	}
+	if _, err := h.Call(context.Background(), "alice", "dev1", "echo", json.RawMessage(`{"text":"after"}`)); err != nil {
+		t.Fatal(err)
 	}
 }

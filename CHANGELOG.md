@@ -74,7 +74,7 @@ are generated from the matching section of this file.
   searches file contents with an RE2 or literal `pattern`. It skips hidden
   entries unless `include_hidden` is set, binary files and files over 16 MiB,
   never follows symlinks, and is bounded by `max_results`, `max_bytes`,
-  200,000 visited entries and 20 seconds. Native tools are now ten.
+  200,000 visited entries and 20 seconds.
 - `write_stdin.wait_for_exit` keeps waiting up to `yield_time_ms` for the
   process to exit, instead of returning on the first new output.
 - `output_mode` on `exec_command` and `write_stdin`: `stream` (default, as
@@ -96,6 +96,26 @@ are generated from the matching section of this file.
   `exec_command`. It reports `lines` and `start_offset`; when the lines exceed
   `max_bytes`, the newest whole lines that fit are returned with
   `truncated: true`.
+- New Hub tool `transfer_file` copies a regular file from one device to
+  another, or within one device, without its content passing through the MCP
+  client. The Hub reads 1 MiB chunks and appends them to a hidden
+  `.rmc-transfer-ID` file beside the target, then renames it into place, so the
+  target never appears half-written; on failure or cancel the staging file is
+  removed. Files up to 16 MiB are verified by sha256 end to end, larger ones by
+  size, and a source that changes meanwhile is never installed. The target gets
+  the source's permission bits unless `mode` is given; `overwrite`,
+  `create_parents` and a target ending in `/` work as expected. A call waits up
+  to `wait_seconds` (default 30, at most 40) and otherwise returns a
+  `transfer_id` to wait on or `cancel`. The Hub makes only ordinary node tool
+  calls as the client, so authorization, revocation and audit apply to every
+  chunk. Both nodes must run this release.
+- New native tool `move_path` renames a file, directory or symlink within one
+  filesystem, like `mv` without copying. Without `overwrite` it never replaces
+  an existing name, even one that appears meanwhile. Native tools are now eleven.
+- `read.offset` starts a base64 read at a byte offset, and `write_file.append`
+  adds to an existing file, with `expected_size` refusing a chunk whose
+  predecessor is missing or was already written. Together they move files
+  larger than 1 MiB in chunks.
 - All new arguments are optional; omitting them keeps the previous behavior,
   except for the `search` default below.
 - Piped enrollment: `rmc device invite --output -` writes the invitation to
@@ -133,6 +153,12 @@ are generated from the matching section of this file.
 
 ### Fixed
 
+- A tool call canceled while the Hub was still writing its request to the
+  node (an MCP client canceling, or the request deadline passing) closed that
+  node's connection, failing every other call on the node until it
+  reconnected. The Hub now finishes writing the request, within the existing
+  10-second write timeout, and reports the canceled call's outcome as unknown
+  as before.
 - `search` with an anchored pattern such as `^func` or `;$` matched only on
   the first or last line of a file, because a whole-file pre-check applied
   `^` and `$` to the whole file. Anchored patterns now skip that pre-check and

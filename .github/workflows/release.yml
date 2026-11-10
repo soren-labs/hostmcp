@@ -33,7 +33,7 @@ jobs:
       - run: go test -race -count=1 ./...
       - name: Build native executable for CLI validation
         run: go build -trimpath -o build/rmc ./cmd/rmc
-      - name: Smoke test stdio CLI and ten native tools
+      - name: Smoke test stdio CLI and eleven native tools
         run: python3 scripts/smoke.py --binary ./build/rmc --mode stdio
 
   build:

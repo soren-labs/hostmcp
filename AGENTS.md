@@ -10,9 +10,9 @@ tools act with that account's ordinary privileges.
 | Path | Purpose |
 | --- | --- |
 | `cmd/rmc` | CLI entry point: `hub`, `device`, `token`, `node`, `connect`, `call`, `service`, `doctor`, `stdio`. The `component` ldflag builds the `all`, `hub` or `node` variant. |
-| `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing. Never executes commands. |
+| `internal/hub` | MCP Streamable HTTP endpoint, client authentication (bearer, external OAuth, Cloudflare Access), device routing, and `transfer_file`, which copies files only through ordinary node tool calls. Never executes commands. |
 | `internal/node` | Outbound node connection loop with heartbeats and reconnect backoff. |
-| `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `search`, `write_file`, `apply_patch`, `view_image`. |
+| `internal/host` | Native tools: `exec_command`, `write_stdin`, processes, `read`, `search`, `write_file`, `move_path`, `apply_patch`, `view_image`. |
 | `internal/mcpserver` | Maps native tools onto the official MCP Go SDK. |
 | `internal/protocol` | Private Hub↔node wire protocol (wire version 1). |
 | `internal/config` | Hub/node configuration files and the locked configuration store. |

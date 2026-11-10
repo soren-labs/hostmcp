@@ -61,6 +61,8 @@ type Hub struct {
 	auditSuppressed map[string]int64
 	// toolArgs is the native tool surface this Hub advertises to MCP clients.
 	toolArgs toolSet
+	// transfers holds transfer_file jobs.
+	transfers transferState
 }
 
 // defaultRequestDeadline cancels admitted /mcp requests and interrupts their
@@ -126,7 +128,8 @@ func New(store *config.Store, tools []protocol.Tool) (*Hub, error) {
 		h.oauthScopes = append([]string(nil), cfg.OAuth.Scopes...)
 		h.metadataURL = strings.TrimSuffix(cfg.PublicURL, "/") + "/.well-known/oauth-protected-resource/mcp"
 	}
-	server := mcpserver.New(mcpserver.Options{Tools: tools, Remote: true, Call: h.Call, ListDevices: h.ListDevices})
+	server := mcpserver.New(mcpserver.Options{Tools: tools, Remote: true, Call: h.Call, ListDevices: h.ListDevices,
+		HubTools: []mcpserver.HubTool{{Tool: transferTool, Call: h.Transfer}}})
 	streamable := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: protocol.MaxMessageBytes,
 		// This is replaced with an explicit configured-host allowlist below so a
@@ -169,9 +172,10 @@ func (h *Hub) Close() error {
 	return nil
 }
 
-// Idle reports that no MCP request is in progress, so a restart interrupts
-// nothing. Nodes reconnect on their own after the Hub restarts.
-func (h *Hub) Idle() bool { return len(h.requests) == 0 }
+// Idle reports that no MCP request or file transfer is in progress, so a
+// restart interrupts nothing. Nodes reconnect on their own after the Hub
+// restarts.
+func (h *Hub) Idle() bool { return len(h.requests) == 0 && h.transfersRunning() == 0 }
 
 // Enrollment never competes with long-running MCP calls for capacity. Client
 // calls also have a four-request per-token limit so one coding agent cannot
@@ -824,7 +828,11 @@ func (h *Hub) Call(ctx context.Context, principal, device, tool string, args jso
 		requestID = "not_dispatched"
 		return protocol.Result{}, fmt.Errorf("request canceled before dispatch; command was not dispatched: %w", err)
 	}
-	writeCtx, writeCancel := context.WithTimeout(callCtx, 10*time.Second)
+	// A websocket write whose context ends mid-frame closes the connection,
+	// which would drop every other call on this node. Once dispatch starts,
+	// finish the frame (still bounded by its own timeout) and honor the
+	// caller's cancellation while waiting for the reply instead.
+	writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(callCtx), 10*time.Second)
 	err = wsjson.Write(writeCtx, d.conn, protocol.Message{Type: "request", ID: id, Principal: principal, Tool: tool, Args: args})
 	writeCancel()
 	unknown := func(reason string) (protocol.Result, error) {

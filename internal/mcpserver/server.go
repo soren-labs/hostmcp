@@ -17,6 +17,15 @@ type Options struct {
 	Principal   string
 	Call        func(context.Context, string, string, string, json.RawMessage) (protocol.Result, error)
 	ListDevices func(context.Context, string) ([]protocol.Device, error)
+	// HubTools are the Hub's own tools, such as transfer_file. They take no
+	// device argument and are called with the principal and raw arguments.
+	HubTools []HubTool
+}
+
+// HubTool is a tool the Hub implements itself rather than routing to a node.
+type HubTool struct {
+	Tool protocol.Tool
+	Call func(ctx context.Context, principal string, args json.RawMessage) (protocol.Result, error)
 }
 
 func New(opts Options) *mcp.Server {
@@ -85,6 +94,27 @@ func New(opts Options) *mcp.Server {
 				return nil, nil, errors.New("tool executor is unavailable")
 			}
 			result, err := opts.Call(ctx, p, device, spec.Name, raw)
+			if err != nil {
+				return nil, nil, err
+			}
+			return Convert(result), nil, nil
+		})
+	}
+	for _, ht := range opts.HubTools {
+		ht := ht
+		mcp.AddTool[map[string]any, any](server, &mcp.Tool{
+			Name: ht.Tool.Name, Description: ht.Tool.Description, InputSchema: ht.Tool.InputSchema,
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: ht.Tool.ReadOnly},
+		}, func(ctx context.Context, req *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+			p, err := principal(req)
+			if err != nil {
+				return nil, nil, err
+			}
+			raw, err := json.Marshal(args)
+			if err != nil {
+				return nil, nil, err
+			}
+			result, err := ht.Call(ctx, p, raw)
 			if err != nil {
 				return nil, nil, err
 			}

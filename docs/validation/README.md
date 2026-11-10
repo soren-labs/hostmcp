@@ -13,6 +13,7 @@ records covered an upstream reference snapshot that was removed after v0.2.3.
 | Unreleased | [Automatic updates](2026-11-09-auto-update.md) | macOS arm64：用真实发布密钥签名的 0.0.x 测试发布与假发布 API；launchd 下节点原地 re-exec、Hub 自更新、坏版本连续启动失败后回滚且不再重试、`rmc update disable/enable`；发现并修复两个缺陷 |
 | Unreleased | [RMC rename compatibility](2026-11-08-rmc-rename.md) | macOS arm64：race 测试、stdio 冒烟、16 个发布包、v0.2.4 更新器跨改名升级/回滚、v0.2.4 与 RMC 的 Hub/Agent/客户端双向互通 |
 | Unreleased | [Tool improvements](2026-11-09-tool-improvements.md) | macOS arm64 与 Linux x86_64：PR #13–#17、#19、#20 的本地完整 CI（race/vet/lint/govulncheck）、stdio 十工具冒烟、基准与轮询、search 对比，以及 12 项真实二进制端到端检查 |
+| Unreleased | [Tool ergonomics and transfer_file](2026-11-10-transfer-file.md) | macOS arm64 与 Linux x86_64：#25 与 transfer_file 的本地完整 CI、stdio 十一工具冒烟（含分块复制与 move_path）、取消/源变化/并发上限测试重复 20 次；Mac mini 真实二进制端到端：40 MiB 跨节点复制 418 ms、sha256 一致、权限保留、无暂存残留 |
 | Unreleased | [PR #10 review](2026-11-04-pr10.md) | Linux/macOS race、原生九工具、请求 I/O 与旧 MCP 截止、心跳、exec 等待、配置撤销与结果兼容回归 |
 | v0.2.3 | [Cloudflare Access validation](v0.2.3-cloudflare-access.md) | macOS 本地源码验证；签名 JWT 与官方 MCP SDK 集成测试。未测试真实 ChatGPT / Cloudflare Access 登录 |
 | v0.2.2 | [OAuth, component and updater validation](v0.2.2-oauth-updates.md) | macOS 本地；外部 OAuth 资源服务器、Hub/Agent 分离产物、离线固定版本更新器 |

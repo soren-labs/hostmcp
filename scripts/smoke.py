@@ -31,7 +31,8 @@ import zlib
 
 PROTOCOL = "2025-11-25"
 TOOLS = {"device_info", "exec_command", "write_stdin", "list_processes",
-         "terminate_process", "read", "write_file", "apply_patch", "view_image", "search"}
+         "terminate_process", "read", "write_file", "apply_patch", "view_image", "search",
+         "move_path"}
 
 
 def check(condition, message):
@@ -233,13 +234,32 @@ class DeviceSmoke:
         check(base64.b64decode(encoded) == binary, "binary file roundtrip failed")
         self.checks.append("unicode_paths_patch_binary")
 
+        # Chunked binary copy: read with offset, write_file append guarded by
+        # expected_size, then an exclusive move_path into place.
+        staged, copied, offset = directory + "/.copy.partial", directory + "/copy.bin", 0
+        while True:
+            entry = self.call("read", paths=[binary_path], encoding="base64", offset=offset, max_bytes=1024)["entries"][0]
+            chunk = base64.b64decode(entry["content"])
+            arguments = {"path": staged, "encoding": "base64", "content": entry["content"]}
+            if offset:
+                arguments.update(append=True, expected_size=offset)
+            self.call("write_file", **arguments)
+            offset += len(chunk)
+            if not entry["truncated"]:
+                break
+        moved = self.call("move_path", **{"from": staged, "to": copied})
+        check(moved.get("replaced") is False, "move_path reported replacing a new name")
+        encoded = self.call("read", paths=[copied], encoding="base64")["entries"][0]["content"]
+        check(base64.b64decode(encoded) == binary, "chunked copy and move_path failed")
+        self.checks.append("chunked_copy_move")
+
         found = self.call("search", path=directory, pattern="第三行")
         check(found.get("mode") == "content"
               and [(m["path"], m["line"]) for m in found["matches"]] == [("中文 目录/测试 文件.txt", 2)]
-              and found["skipped"]["binary"] == 1,
+              and found["skipped"]["binary"] == 2,
               "search did not find exactly the patched line")
         listed = self.call("search", path=directory, glob="*.bin")
-        check([entry["path"] for entry in listed["entries"]] == ["binary.bin"], "search glob listing failed")
+        check([entry["path"] for entry in listed["entries"]] == ["binary.bin", "copy.bin"], "search glob listing failed")
         self.checks.append("native_search")
 
         png = tiny_png()
@@ -285,7 +305,7 @@ class DeviceSmoke:
         self.finish(repeated)
         check(self.read_text(marker) == "once\n", "idempotent request repeated a filesystem side effect")
         self.checks.append("idempotent_side_effect")
-        check(TOOLS <= self.tools, "not all ten native tools were exercised")
+        check(TOOLS <= self.tools, "not all eleven native tools were exercised")
         return uid
 
     def cleanup(self):

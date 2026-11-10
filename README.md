@@ -73,11 +73,13 @@ too. Builds and other heavy work happen on the device you pick.
 | `exec_command` | Run a shell command, optionally in a PTY; returns a session for long-running work. Optional `output_mode` and `clean_ansi` |
 | `write_stdin` | Read more output from a session, send input or signals, resize a PTY. Optional `wait_for_exit`, `output_mode` and `clean_ansi` |
 | `list_processes` / `terminate_process` | List and stop the caller's own sessions |
-| `read` | Read files (text line ranges, the last lines with `tail_lines`, or base64), list directories, show metadata; regular files also report `sha256` |
+| `read` | Read files (text line ranges, the last lines with `tail_lines`, or base64 from an `offset`), list directories, show metadata; regular files also report `sha256` |
 | `search` | Find files by `glob`, or search contents with an RE2 or literal `pattern`, optionally with `context_lines`; read-only, skips hidden, dependency (`node_modules` and similar), binary and large files |
-| `write_file` | Create or overwrite a file (text or base64); optional `expected_sha256` replaces only an unchanged file |
+| `write_file` | Create or overwrite a file (text or base64); optional `expected_sha256` replaces only an unchanged file; `append` with `expected_size` adds chunks |
+| `move_path` | Rename a file, directory or symlink within one filesystem; never replaces an existing name unless `overwrite` |
 | `apply_patch` | Apply a `*** Begin Patch` add/update/delete/move patch |
 | `view_image` | Return a PNG, JPEG or GIF file as MCP image content |
+| `transfer_file` | Copy a file from one device to another through the Hub, without its content passing through the conversation; verified, installed atomically, resumable by `transfer_id` (remote Hub only) |
 
 On a remote Hub every device tool takes a `device` argument with the node ID from
 `list_devices`. In local `stdio` mode the tools act on the current machine.
